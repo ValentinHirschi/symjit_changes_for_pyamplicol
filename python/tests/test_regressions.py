@@ -15,7 +15,7 @@ from sympy import And, Max, Min, Or, Piecewise, Rational, cos, exp, log, sin, sq
 
 sys.path.insert(0, os.environ.get("SYMJIT_PYTHON_PATH", os.path.join(os.path.dirname(__file__), "..")))
 
-from symjit import compile_func
+from symjit import Composer, compile_composer, compile_func
 
 x, y, z = symbols("x y z")
 
@@ -113,6 +113,22 @@ class Regressions(unittest.TestCase):
         # outside its conditions in sympy, but symjit treats the last branch as the else branch
         X = np.array([[-1.0, 0.5, 5.0]] * 3)
         self.check([Piecewise((1, x < 0), (2, x < 1))], X, options=[dict(opt_level=2)])
+
+    def test_composer_complex_recursion(self):
+        # `Composer.call` marked every call `is_real`, so with the indirect translator a
+        # recursive call took the real parts of its arguments: f(a, b) below, which recurses
+        # once and returns b, gave 3 instead of 3+4j
+        cp = Composer(2, 1)
+        a, b = cp.arg(0), cp.arg(1)
+        stop = cp.lt(cp.real(a), cp.constant(0.5))
+        base, rec = cp.new_block(), cp.new_block()
+        r = rec.call(None, rec.complex(cp.constant(0.0), cp.imag(a)), b)
+        cp.append_if_else(stop, base, rec)
+        cp.assign(cp.out(0), cp.join(stop, b, r))
+        for options in (dict(), dict(direct=False), dict(direct=False, fast_complex=False)):
+            with self.subTest(options=options):
+                f = compile_composer(cp, dtype="complex128", **options)
+                self.assertEqual(complex(f.evaluate_complex([[1 + 2j, 3 + 4j]])[0, 0]), 3 + 4j)
 
 
 if __name__ == "__main__":

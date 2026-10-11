@@ -1,3 +1,28 @@
+# Version 2.27.1
+
+* Repo re-organization with moving tests from `symjit-crate`.
+* Backporting recursive CSE and async mode (co-routines for single-threaded vectorized kernels).
+* Various tests and examples (domino folder).
+
+# Version 2.27.0
+
+* The number of arguments of an inner/external function call is configurable (`num_args`
+  option).
+* Support for Symbolica v3 evaluators.
+* New `libm` cargo feature: complex trigonometric and hyperbolic functions use the C library.
+* aarch64: `fcmla` is used for complex multiplication whenever the CPU supports FCMA..
+* Fixing recursive calls.
+
+# Version 2.26.2
+
+* Raising the function call argument limit to 1024 with the `symbolica` feature.
+* Fixes for bugs found by fuzzing.
+
+# Version 2.26.1
+
+* Recursive calls: a `defuns` entry set to `None` calls the function being compiled.
+* Querying the library version (`"version"`).
+
 # Version 2.25.0
 
 * Adding inner functions and compression modes to riscv and aarch64.

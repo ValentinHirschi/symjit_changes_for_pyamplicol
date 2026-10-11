@@ -613,12 +613,9 @@ pub struct IndirectTranslator {
 
 impl Composer for IndirectTranslator {
     fn append_constant(&mut self, z: Complex<f64>) -> Result<usize> {
+        // `consts` holds one `Complex` per constant, read back as `consts[idx]`
         self.consts.push(z);
-        if self.config.is_complex() {
-            Ok((self.consts.len() - 1) / 2)
-        } else {
-            Ok(self.consts.len() - 1)
-        }
+        Ok(self.consts.len() - 1)
     }
 
     fn append_add(&mut self, lhs: &Slot, args: &[Slot], num_reals: usize) -> Result<()> {
@@ -1086,7 +1083,12 @@ impl IndirectTranslator {
         }
         let mut args = v;
 
-        if VirtualTable::from_str(op).is_ok() || op.starts_with("composer_") {
+        // kernel functions (recursive calls, applets) take their arguments in the
+        // `__Arg` slots, not in registers, even when named `composer_*`
+        let by_register = !self.config.is_kernel_func(op)
+            && (VirtualTable::from_str(op).is_ok() || op.starts_with("composer_"));
+
+        if by_register {
             if n == 1 {
                 let rhs = self.unary_node(op, args.remove(0))?;
                 self.assign(lhs, rhs)?;

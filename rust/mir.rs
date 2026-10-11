@@ -1205,6 +1205,12 @@ impl Mir {
     }
 
     pub fn find_op(&self, op: &str) -> Result<Func> {
+        // `Mir::rerun` turns a call of a recursive function into a call of `@self`, which
+        // the complexifier replays through `Mir::call`
+        if op == "@self" {
+            return Ok(Func::Recursive);
+        }
+
         if let Some(df) = &self.config.df {
             if let Some(f) = df.funcs.get(op) {
                 return Ok(f.clone());
@@ -1405,6 +1411,8 @@ impl Mir {
         let mut ip: usize = 0;
         let prog: Vec<Instruction> = self.code.iter().collect();
         let n = prog.len();
+        // return addresses of subroutine calls (`Call` with no arguments)
+        let mut returns: Vec<usize> = Vec::new();
 
         while ip < n {
             let ins = &prog[ip];
@@ -1477,6 +1485,10 @@ impl Mir {
                 }
                 Instruction::SaveArgs { .. } => {
                     unimplemented!()
+                }
+                Instruction::Call { label, num_args: 0 } => {
+                    returns.push(ip);
+                    ip = *self.labels.get(label).unwrap() - 1;
                 }
                 Instruction::Call { label, num_args } => {
                     let f = self.find_op(label).unwrap();
@@ -1563,6 +1575,7 @@ impl Mir {
                     )
                 }
                 Instruction::Label { .. } => {}
+                Instruction::Branch { label } if label == ".ret" => ip = returns.pop().unwrap(),
                 Instruction::Branch { label } => ip = *self.labels.get(label).unwrap() - 1,
                 Instruction::BranchIf {
                     cond,

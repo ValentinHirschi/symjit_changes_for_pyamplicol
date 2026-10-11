@@ -1,9 +1,12 @@
+mod common;
+use common::base_config;
+
 use anyhow::Result;
 pub use num_complex::{Complex, ComplexFloat};
-use symjit::{Composer, Config, Defuns, Slot, Translator};
+use symjit::{Composer, Defuns, Slot, Translator};
 
 fn compile_evaluators() -> Result<symjit::Application> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(false);
     config.set_direct(false);
 
@@ -15,7 +18,7 @@ fn compile_evaluators() -> Result<symjit::Application> {
     let mut defuns = Defuns::new();
     defuns.add_applet("f", f);
 
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(false);
     config.set_direct(false);
     config.set_defuns(defuns);

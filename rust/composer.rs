@@ -265,7 +265,12 @@ impl DirectTranslator {
         let n = args.len();
         self.mark_real(lhs, is_real);
 
-        if VirtualTable::from_str(op).is_ok() || op.starts_with("composer_") {
+        // kernel functions (recursive calls, applets) take their arguments in the
+        // `__Arg` slots, not in registers, even when named `composer_*`
+        let by_register = !self.mir.config.is_kernel_func(op)
+            && (VirtualTable::from_str(op).is_ok() || op.starts_with("composer_"));
+
+        if by_register {
             if n == 1 {
                 self.load(reg(0), &args[0])?;
                 self.mir.setup_call_unary(reg(0));
@@ -308,14 +313,10 @@ impl DirectTranslator {
 
 impl Composer for DirectTranslator {
     fn append_constant(&mut self, z: Complex<f64>) -> Result<usize> {
+        // `consts` holds (re, im) pairs; `load` reads constant `idx` at `2 * idx`
         self.consts.push(z.re);
         self.consts.push(z.im);
-
-        if self.mir.config.is_complex() {
-            Ok((self.consts.len() - 1) / 2)
-        } else {
-            Ok(self.consts.len() - 1)
-        }
+        Ok(self.consts.len() / 2 - 1)
     }
 
     fn append_add(&mut self, lhs: &Slot, args: &[Slot], num_reals: usize) -> Result<()> {

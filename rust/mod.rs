@@ -458,7 +458,9 @@ pub unsafe extern "C" fn compile(
         }
     } else {
         res.status = CompilerStatus::InvalidCompiler;
-        res.msg = error_message("Config error", opt);
+        // the reason (e.g. an invalid option after the type in `ty`)
+        let err = Config::from_name(ty, opt).err().map(|e| e.to_string());
+        res.msg = error_message("Config error", err.unwrap_or_default());
     }
 
     Box::into_raw(Box::new(res)) as *const _
@@ -536,7 +538,9 @@ pub unsafe extern "C" fn translate(
         }
     } else {
         res.status = CompilerStatus::InvalidCompiler;
-        res.msg = error_message("Config error", opt);
+        // the reason (e.g. an invalid option after the type in `ty`)
+        let err = Config::from_name(ty, opt).err().map(|e| e.to_string());
+        res.msg = error_message("Config error", err.unwrap_or_default());
     }
 
     Box::into_raw(Box::new(res)) as *const _

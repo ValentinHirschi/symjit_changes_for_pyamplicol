@@ -44,10 +44,14 @@ symbolica = []
 libm = []
 async = []
 
+[profile.profiling]
+  inherits = "release"
+  debug = true
+
 [lib]
 path = "rust/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
 [[bin]]
-name = "prifiler"
+name = "profiler"
 path = "profile/profiler.rs"

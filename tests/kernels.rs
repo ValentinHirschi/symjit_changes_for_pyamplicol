@@ -1,7 +1,13 @@
+mod common;
+use common::base_config;
+
 use anyhow::Result;
 pub use num_complex::{Complex, ComplexFloat};
 use symjit::{Compiled, Compiler, Config, PlaneDescriptor};
-use wide::{f64x2, f64x4};
+#[cfg(target_arch = "aarch64")]
+use wide::f64x2;
+#[cfg(target_arch = "x86_64")]
+use wide::f64x4;
 
 const MODEL: &str = "
 ([('fun', ('temp', 0), 'square', [], [('param', 0)], False),
@@ -11,13 +17,14 @@ const MODEL: &str = "
  [])
 ";
 
+#[allow(dead_code)]
 fn pass(what: &str) {
     println!("**** test {:?} passed. ****", what);
 }
 
 #[test]
 pub fn test_instructions() -> Result<()> {
-    let mut compiler = Compiler::new();
+    let mut compiler = Compiler::with_config(base_config());
     let app = compiler.translate(MODEL.into(), 0)?;
 
     let args = vec![3.0, 5.0];
@@ -30,7 +37,7 @@ pub fn test_instructions() -> Result<()> {
 
 #[test]
 fn kernel_p1_real() -> Result<()> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_direct_arena(true);
     let mut compiler = Compiler::with_config(config);
 
@@ -46,7 +53,7 @@ fn kernel_p1_real() -> Result<()> {
 
 #[test]
 fn kernel_p1_complex() -> Result<()> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(true);
     config.set_direct_arena(true);
     let mut compiler = Compiler::with_config(config);
@@ -66,7 +73,7 @@ fn kernel_p1_complex() -> Result<()> {
 
 #[test]
 fn kernel_p2_scalar_real() -> Result<()> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_direct_arena(true);
     let mut compiler = Compiler::with_config(config);
     let app = compiler.translate(MODEL.into(), 0)?.seal()?;
@@ -86,7 +93,7 @@ fn kernel_p2_scalar_real() -> Result<()> {
 
 #[test]
 fn kernel_p2_scalar_complex() -> Result<()> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(true);
     config.set_direct_arena(true);
     let mut compiler = Compiler::with_config(config);
@@ -114,7 +121,7 @@ fn kernel_p2_scalar_complex() -> Result<()> {
 
 #[test]
 fn kernel_p2_simd_real() -> Result<()> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_direct_arena(true);
     let mut compiler = Compiler::with_config(config);
     let app = compiler.translate(MODEL.into(), 0)?.seal()?;
@@ -133,9 +140,10 @@ fn kernel_p2_simd_real() -> Result<()> {
     Ok(())
 }
 
-#[ignore]
+#[test]
+#[ignore = "direct_arena_identity_output(false) (output scaled by a parameter) is not implemented"]
 fn kernel_p2_simd_real_coef() -> Result<()> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_direct_arena(true);
     config.set_direct_arena_identity_output(false);
     let mut compiler = Compiler::with_config(config);
@@ -157,7 +165,7 @@ fn kernel_p2_simd_real_coef() -> Result<()> {
 
 #[test]
 fn kernel_p2_simd_complex() -> Result<()> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(true);
     config.set_direct_arena(true);
     let mut compiler = Compiler::with_config(config);
@@ -189,7 +197,7 @@ fn kernel_p2_simd_complex() -> Result<()> {
 
 #[test]
 fn kernel_p2_simd_complex_trailing_inputs() -> Result<()> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(true);
     config.set_direct_arena(true);
     let mut compiler = Compiler::with_config(config);
@@ -222,9 +230,10 @@ fn kernel_p2_simd_complex_trailing_inputs() -> Result<()> {
     Ok(())
 }
 
-#[ignore]
+#[test]
+#[ignore = "direct_arena_identity_output(false) (output scaled by a parameter) is not implemented"]
 fn kernel_p2_simd_complex_coef() -> Result<()> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(true);
     config.set_direct_arena(true);
     config.set_direct_arena_identity_output(false);
@@ -330,7 +339,7 @@ fn kernel_p2_raw_duplicate_and_alias() -> Result<()> {
 
 #[test]
 fn kernel_b1_scalar_real() -> Result<()> {
-    let mut compiler = Compiler::new();
+    let mut compiler = Compiler::with_config(base_config());
     let app = compiler.translate(MODEL.into(), 0)?.seal()?;
 
     let args = [3.0, 5.0];
@@ -345,7 +354,7 @@ fn kernel_b1_scalar_real() -> Result<()> {
 
 #[test]
 fn kernel_b1_scalar_real_trailing_inputs() -> Result<()> {
-    let mut compiler = Compiler::new();
+    let mut compiler = Compiler::with_config(base_config());
     let app = compiler.translate(MODEL.into(), 4)?.seal()?;
 
     let args = [3.0, 5.0, -2.0, 3.0];
@@ -360,7 +369,7 @@ fn kernel_b1_scalar_real_trailing_inputs() -> Result<()> {
 
 #[test]
 fn kernel_b1_scalar_complex() -> Result<()> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(true);
     let mut compiler = Compiler::with_config(config);
     let app = compiler.translate(MODEL.into(), 0)?.seal()?;
@@ -385,7 +394,7 @@ fn kernel_b1_scalar_complex() -> Result<()> {
 #[cfg(target_arch = "x86_64")]
 #[test]
 fn kernel_b1_simd_real() -> Result<()> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.enable_simd512(false);
     let mut compiler = Compiler::with_config(config);
     let mut app = compiler.translate(MODEL.into(), 0)?;
@@ -414,7 +423,7 @@ fn kernel_b1_simd_real() -> Result<()> {
 #[cfg(target_arch = "aarch64")]
 #[test]
 fn kernel_b1_simd_real() -> Result<()> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.enable_simd512(false);
     let mut compiler = Compiler::with_config(config);
     let mut app = compiler.translate(MODEL.into(), 0)?;
@@ -440,7 +449,7 @@ fn kernel_b1_simd_real() -> Result<()> {
 #[cfg(target_arch = "x86_64")]
 #[test]
 fn kernel_b1_simd_complex() -> Result<()> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(true);
     config.enable_simd512(false);
     let mut compiler = Compiler::with_config(config);
@@ -483,7 +492,7 @@ fn kernel_b1_simd_complex() -> Result<()> {
 #[cfg(target_arch = "aarch64")]
 #[test]
 fn kernel_b1_simd_complex() -> Result<()> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(true);
     let mut compiler = Compiler::with_config(config);
     let app = compiler.translate(MODEL.into(), 0)?.seal()?;
@@ -509,7 +518,7 @@ fn kernel_b1_simd_complex() -> Result<()> {
 
 #[test]
 fn kernel_b2_simd_real() -> Result<()> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.enable_simd512(false);
     let mut compiler = Compiler::with_config(config);
     let mut app = compiler.translate(MODEL.into(), 0)?;
@@ -529,7 +538,7 @@ fn kernel_b2_simd_real() -> Result<()> {
 
 #[test]
 fn kernel_b2_simd_complex() -> Result<()> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(true);
     config.enable_simd512(false);
     let mut compiler = Compiler::with_config(config);

@@ -1,4 +1,5 @@
-use std::f64;
+mod common;
+use common::base_config;
 
 use anyhow::Result;
 use num_complex::Complex;
@@ -14,7 +15,7 @@ fn test_simple() -> Result<()> {
     let p = &x + &y;
     let q = &x * &y;
 
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_opt_level(2); // optional
     let mut comp = Compiler::with_config(config);
 
@@ -41,10 +42,10 @@ fn test_pi_viete() -> Result<()> {
         u = &u * &t.sqrt();
     }
 
-    let mut app = Compiler::new().compile(&[x], &[&int(2) / &u])?;
+    let mut app = Compiler::with_config(base_config()).compile(&[x], &[&int(2) / &u])?;
     let res = app.call(&[0.5]);
 
-    assert!((res[0] - f64::consts::PI).abs() < 1e-14);
+    assert!((res[0] - std::f64::consts::PI).abs() < 1e-14);
 
     Ok(())
 }
@@ -65,11 +66,11 @@ fn test_loops() -> Result<()> {
     let denom = j.mul(&int(2)).add(&int(1));
     let v = (&numer / &denom).sum(&j, &int(0), &n);
 
-    let mut app = Compiler::new().compile(&[x, n], &[u, v])?;
+    let mut app = Compiler::with_config(base_config()).compile(&[x, n], &[u, v])?;
     let res = app.call(&[2.0, 100000000.0]);
 
     assert!((res[0] - f64::exp(2.0)).abs() < 1e-10);
-    assert!((res[1] - f64::consts::PI).abs() < 1e-6);
+    assert!((res[1] - std::f64::consts::PI).abs() < 1e-6);
 
     Ok(())
 }
@@ -81,7 +82,7 @@ fn test_fast() -> Result<()> {
     let z = Expr::var("z");
     let p = &x * &(&y - &z).pow(&Expr::from(2));
 
-    let mut comp = Compiler::new();
+    let mut comp = Compiler::with_config(base_config());
     let mut app = comp.compile(&[x, y, z], &[p])?;
     let f = app.fast_func()?;
 
@@ -99,7 +100,7 @@ fn test_fact() -> Result<()> {
     let i = Expr::var("i");
     let p = i.prod(&i, &Expr::from(1), &x);
 
-    let mut comp = Compiler::new();
+    let mut comp = Compiler::with_config(base_config());
     let mut app = comp.compile(&[x], &[p])?;
     let f = app.fast_func()?;
 
@@ -127,7 +128,8 @@ fn test_external_inner(p: i32) -> Result<()> {
     let mut df = Defuns::new();
     df.add_unary("f_", f);
     df.add_binary("g_", g);
-    let mut config = Config::from_defuns(df)?;
+    let mut config = base_config();
+    config.set_defuns(df);
     config.set_option("use_simd", "true")?;
     let mut comp = Compiler::with_config(config);
 
@@ -162,7 +164,7 @@ fn compile_external_evaluators(direct: bool) -> Result<symjit::Application> {
     defuns.add_sliced_func("f", f)?;
     defuns.add_sliced_func("g", g)?;
 
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(false);
     config.set_direct(direct);
     config.set_defuns(defuns);
@@ -192,7 +194,7 @@ fn test_external_evaluators() -> Result<()> {
 
 #[test]
 fn test_multiple() -> Result<()> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(false);
 
     // Compile f(y) + f(x). The call order makes the incorrect result match the original report.
@@ -216,7 +218,7 @@ fn test_multiple() -> Result<()> {
 
 #[test]
 fn test_output_reuse() -> Result<()> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(false);
 
     // Compile f(y) + f(x). The call order makes the incorrect result match the original report.
@@ -350,7 +352,7 @@ fn declared_unused_inputs_do_not_shift_outputs() -> Result<()> {
 #[test]
 fn test_zero_params() -> Result<()> {
     let simd = std::env::args().nth(1).as_deref() != Some("scalar");
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(true);
     config.set_fastmath(false);
     config.set_direct(false);
@@ -386,7 +388,7 @@ fn test_zero_params() -> Result<()> {
 
 #[test]
 fn test_hyperbolic() -> Result<()> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(true);
 
     let mut t = Translator::new(config);

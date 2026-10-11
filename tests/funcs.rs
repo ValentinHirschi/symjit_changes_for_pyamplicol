@@ -1,10 +1,13 @@
+mod common;
+use common::base_config;
+
 use anyhow::Result;
 pub use num_complex::{Complex, ComplexFloat};
-use symjit::{Composer, Config, Defuns, Slot, Translator};
+use symjit::{Composer, Defuns, Slot, Translator};
 
 #[test]
 fn test_simple() -> Result<()> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(false);
     config.set_num_args(1000);
 
@@ -21,7 +24,7 @@ fn test_simple() -> Result<()> {
 }
 
 fn compile_external_evaluators(direct: bool, complex: bool) -> Result<symjit::Application> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(complex);
     config.set_direct(direct);
     config.set_debug_scalar(false);
@@ -34,7 +37,7 @@ fn compile_external_evaluators(direct: bool, complex: bool) -> Result<symjit::Ap
     let mut defuns = Defuns::new();
     defuns.add_applet("f", f);
 
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(complex);
     config.set_direct(direct);
     config.set_debug_scalar(false);
@@ -126,7 +129,7 @@ fn test_external_evaluators_complex_simd() -> Result<()> {
 
 #[test]
 fn test_factorial() -> Result<()> {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(false);
 
     let mut df = Defuns::new();
@@ -167,7 +170,7 @@ fn test_factorial() -> Result<()> {
 #[test]
 fn test_args() -> Result<()> {
     let num_args: usize = 1000;
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(false);
     let mut ev = Translator::new(config);
 
@@ -187,7 +190,7 @@ fn test_args() -> Result<()> {
     let mut df = Defuns::new();
     df.add_applet("f", f);
 
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(false);
     config.set_direct(false);
     config.set_defuns(df);

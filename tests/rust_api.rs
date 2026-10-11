@@ -1,9 +1,12 @@
 //! This compiles as an external Rust consumer, independently of the C ABI.
-use symjit::{Complex, Composer, Config, Slot, Translator};
+mod common;
+use common::base_config;
+
+use symjit::{Complex, Composer, Slot, Translator};
 
 #[test]
 fn rust_library_exposes_native_composer_and_complex_execution() {
-    let mut config = Config::default();
+    let mut config = base_config();
     config.set_complex(true);
     config.set_opt_level(2);
     let mut translator = Translator::new(config);

@@ -617,7 +617,10 @@ impl Config {
         if op == "@self" {
             true
         } else if let Some(df) = &self.df {
-            matches!(df.funcs.get(op), Some(Func::App { .. }))
+            matches!(
+                df.funcs.get(op),
+                Some(Func::App { .. }) | Some(Func::Recursive)
+            )
         } else {
             false
         }

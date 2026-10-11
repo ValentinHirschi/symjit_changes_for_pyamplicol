@@ -7,7 +7,7 @@ use symjit::Compiler;
  * 2. Profile as samply record ./target/profiling/profiler
  */
 pub fn main() -> Result<()> {
-    let model = std::fs::read_to_string("3loop_instructions_2.txt")?;
+    let model = std::fs::read_to_string("profile/3loop_instructions_2.txt")?;
     for _ in 0..10 {
         let mut compiler = Compiler::new();
         compiler.translate(model.clone(), 0)?;

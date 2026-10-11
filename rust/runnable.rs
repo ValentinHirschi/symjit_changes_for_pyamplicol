@@ -520,6 +520,10 @@ impl Application {
             } else {
                 self.exec_vectorized_scalar(states, obs, self.use_threads);
             }
+        } else {
+            // no machine code (`ty = "bytecode"`): one column at a time on the bytecode
+            // interpreter
+            self.exec_vectorized_simple(states, obs);
         }
     }
 
