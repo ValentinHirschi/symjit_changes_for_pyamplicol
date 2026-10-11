@@ -32,7 +32,7 @@ toml= "1.1"
 hugepage-rs = "0.1"
 lazy_static = "1.5"
 rand = "0.10"
-corosensei = "0.3.4"
+corosensei = { version = "0.3.4", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_System_Memory"] }
@@ -42,7 +42,7 @@ selinux-fix = ["memmap2"]
 default = ["async"]
 symbolica = []
 libm = []
-async = []
+async = ["dep:corosensei"]
 
 [profile.profiling]
   inherits = "release"
