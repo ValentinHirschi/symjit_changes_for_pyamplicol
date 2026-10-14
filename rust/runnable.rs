@@ -9,6 +9,7 @@ use super::amd::{
 };
 use super::applet::Applet;
 use super::arm::{ArmComplexGenerator, ArmGenerator, ArmSimdGenerator};
+use super::code::Func;
 use super::complexify::Complexifier;
 use super::config::Config;
 use super::generator::{Generator, GeneratorType};
@@ -462,7 +463,15 @@ impl Application {
 
     pub fn prepare_simd(&mut self) {
         // SIMD compilation is lazy!
-        if self.compiled_simd.is_none() && self.use_simd {
+        // A SIMD kernel calls the SIMD kernels of the applets it calls (`_simd_<name>_`):
+        // without one (e.g. an applet sealed from `Compiler::compile`, which does not
+        // prepare SIMD), it stays scalar, as when its compilation fails.
+        let applets_have_simd = self.config.df.as_ref().is_none_or(|df| {
+            df.funcs
+                .values()
+                .all(|f| !matches!(f, Func::App(app) if app.simd_kernel().is_none()))
+        });
+        if self.compiled_simd.is_none() && self.use_simd && applets_have_simd {
             if self.config.has_avx() {
                 self.compiled_simd =
                     Self::compile_avx_simd(&self.bytecode.mir, &mut self.prog).ok();
@@ -571,9 +580,27 @@ impl Application {
         }
     }
 
-    fn exec_single(t: usize, v: &Matrix, params: &[f64], f: CompiledFunc<f64>) {
+    fn exec_single(t: usize, v: &Matrix, params: &[f64], f: CompiledFunc<f64>) -> i32 {
         let p = v.p.as_ptr();
-        f(std::ptr::null(), p, t, params.as_ptr());
+        f(std::ptr::null(), p, t, params.as_ptr())
+    }
+
+    /// Runs the SIMD kernel `f_simd` on the `l` points from `t`; when it does not finish (its
+    /// lanes take different sides of a branch, `Generator::branch_if`, and it returns
+    /// non-zero), the scalar kernel `f` computes the points one at a time.
+    fn exec_simd_row(
+        t: usize,
+        l: usize,
+        v: &Matrix,
+        params: &[f64],
+        f_simd: CompiledFunc<f64>,
+        f: CompiledFunc<f64>,
+    ) {
+        if Self::exec_single(t, v, params, f_simd) != 0 {
+            for i in t..t + l {
+                Self::exec_single(i, v, params, f);
+            }
+        }
     }
 
     pub fn exec_vectorized_scalar(&mut self, states: &mut Matrix, obs: &mut Matrix, threads: bool) {
@@ -585,13 +612,13 @@ impl Application {
             let v = combine_matrixes(states, obs);
 
             if threads {
-                (0..n)
-                    .into_par_iter()
-                    .for_each(|t| Self::exec_single(t, &v, params, f));
+                (0..n).into_par_iter().for_each(|t| {
+                    Self::exec_single(t, &v, params, f);
+                });
             } else {
-                (0..n)
-                    //.into_iter()
-                    .for_each(|t| Self::exec_single(t, &v, params, f));
+                (0..n).for_each(|t| {
+                    Self::exec_single(t, &v, params, f);
+                });
             }
         }
     }
@@ -610,25 +637,27 @@ impl Application {
             let n0 = l * (n / l);
             let v = combine_matrixes(states, obs);
 
+            let f = compiled.func();
+
             if let Some(g) = &mut self.compiled_simd {
-                let f = g.func();
+                let f_simd = g.func();
                 if threads {
                     (0..n / l)
                         .into_par_iter()
-                        .for_each(|t| Self::exec_single(t * l, &v, params, f));
+                        .for_each(|t| Self::exec_simd_row(t * l, l, &v, params, f_simd, f));
                 } else {
-                    (0..n / l).for_each(|t| Self::exec_single(t * l, &v, params, f));
+                    (0..n / l).for_each(|t| Self::exec_simd_row(t * l, l, &v, params, f_simd, f));
                 }
             }
 
-            let f = compiled.func();
-
             if threads {
-                (n0..n)
-                    .into_par_iter()
-                    .for_each(|t| Self::exec_single(t, &v, params, f));
+                (n0..n).into_par_iter().for_each(|t| {
+                    Self::exec_single(t, &v, params, f);
+                });
             } else {
-                (n0..n).for_each(|t| Self::exec_single(t, &v, params, f));
+                (n0..n).for_each(|t| {
+                    Self::exec_single(t, &v, params, f);
+                });
             }
         }
     }
