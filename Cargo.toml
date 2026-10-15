@@ -39,10 +39,11 @@ windows-sys = { version = "0.61", features = ["Win32_System_Memory"] }
 
 [features]
 selinux-fix = ["memmap2"]
-default = ["async"]
+default = ["async", "sympy"]
 symbolica = []
 libm = []
 async = ["dep:corosensei"]
+sympy = []
 
 [profile.profiling]
   inherits = "release"
