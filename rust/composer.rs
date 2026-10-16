@@ -16,6 +16,15 @@ pub trait Composer {
     fn append_constant(&mut self, z: Complex<f64>) -> Result<usize>;
     fn append_add(&mut self, lhs: &Slot, args: &[Slot], num_reals: usize) -> Result<()>;
     fn append_mul(&mut self, lhs: &Slot, args: &[Slot], num_reals: usize) -> Result<()>;
+    /// Divide directly, without first forming the denominator's reciprocal.
+    fn append_div(
+        &mut self,
+        lhs: &Slot,
+        numerator: &Slot,
+        denominator: &Slot,
+        numerator_is_real: bool,
+        denominator_is_real: bool,
+    ) -> Result<()>;
     fn append_pow(&mut self, lhs: &Slot, arg: &Slot, p: i64, is_real: bool) -> Result<()>;
     fn append_powf(&mut self, lhs: &Slot, arg: &Slot, p: &Slot, is_real: bool) -> Result<()>;
     fn append_assign(&mut self, lhs: &Slot, rhs: &Slot) -> Result<()>;
@@ -264,6 +273,11 @@ impl DirectTranslator {
         args: &[Slot],
         is_real: bool,
     ) -> Result<()> {
+        let op = if self.mir.config.is_complex() && op == "abs" {
+            "stable_abs"
+        } else {
+            op
+        };
         let n = args.len();
         self.mark_real(lhs, is_real);
 
@@ -366,6 +380,32 @@ impl Composer for DirectTranslator {
         self.save(reg(0), lhs)?;
 
         Ok(())
+    }
+
+    fn append_div(
+        &mut self,
+        lhs: &Slot,
+        numerator: &Slot,
+        denominator: &Slot,
+        numerator_is_real: bool,
+        denominator_is_real: bool,
+    ) -> Result<()> {
+        self.mark_real(numerator, numerator_is_real);
+        self.mark_real(denominator, denominator_is_real);
+        if self.mir.config.is_complex() {
+            // Use the ordinary call owner so allocation sees the clobber
+            // boundary; complex division needs range-safe component arithmetic.
+            return self.append_fun_generic(
+                lhs,
+                "stable_divide",
+                &[*numerator, *denominator],
+                numerator_is_real && denominator_is_real,
+            );
+        }
+        self.load(reg(0), numerator)?;
+        self.load(reg(1), denominator)?;
+        self.mir.divide(reg(2), reg(0), reg(1));
+        self.save(reg(2), lhs)
     }
 
     fn append_pow(&mut self, lhs: &Slot, arg: &Slot, p: i64, is_real: bool) -> Result<()> {
