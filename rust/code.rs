@@ -243,6 +243,12 @@ fn tan_c(z: Complex<f64>) -> Complex<f64> {
 pub struct VirtualTable;
 
 impl VirtualTable {
+    /// Names used by intrinsic lowering cannot be rebound to user callbacks.
+    pub(crate) fn is_internal_name(name: &str) -> bool {
+        name.strip_prefix("cplx_")
+            .unwrap_or(name)
+            .starts_with("__symjit_")
+    }
     /// The C math library (libm) function computing `op`, for object files; None if
     /// there is none (e.g. `csc`, `sinc`, complex functions). Note that symjit's `log`
     /// is the decimal logarithm and `ln` the natural one.
@@ -323,10 +329,12 @@ impl VirtualTable {
             "power" => Func::Binary(Self::power),
             "atan2" => Func::Binary(Self::atan2),
             "arg" => Func::Unary(Self::arg),
-            "stable_abs" => Func::Unary(Self::stable_abs),
-            "stable_divide" => Func::Binary(Self::stable_divide),
+            "__symjit_abs" => Func::Unary(Self::stable_abs),
+            "__symjit_divide" => Func::Binary(Self::stable_divide),
+            "__symjit_root" => Func::Unary(Self::stable_root),
             // Unary Complex Functions
-            "cplx_stable_abs" => Func::UnaryCplx(Self::cplx_stable_abs),
+            "cplx___symjit_abs" => Func::UnaryCplx(Self::cplx_stable_abs),
+            "cplx___symjit_root" => Func::UnaryCplx(Self::cplx_root),
             "cplx_sin" => Func::UnaryCplx(Self::cplx_sin),
             "cplx_sinc" => Func::UnaryCplx(Self::cplx_sinc),
             "cplx_cos" => Func::UnaryCplx(Self::cplx_cos),
@@ -346,13 +354,12 @@ impl VirtualTable {
             "cplx_arcsinh" => Func::UnaryCplx(Self::cplx_asinh),
             "cplx_arccosh" => Func::UnaryCplx(Self::cplx_acosh),
             "cplx_arctanh" => Func::UnaryCplx(Self::cplx_atanh),
-            // "cplx_root" => Func::UnaryCplx(Self::cplx_root),
             "cplx_cbrt" => Func::UnaryCplx(Self::cplx_cbrt),
             "cplx_exp" => Func::UnaryCplx(Self::cplx_exp),
             "cplx_ln" => Func::UnaryCplx(Self::cplx_ln),
             "cplx_log" => Func::UnaryCplx(Self::cplx_log),
             // Complex Binary Functions
-            "cplx_stable_divide" => Func::BinaryCplx(Self::cplx_stable_divide),
+            "cplx___symjit_divide" => Func::BinaryCplx(Self::cplx_stable_divide),
             "cplx_power" => Func::BinaryCplx(Self::cplx_power),
             "cplx_random" => Func::UnaryCplx(Self::cplx_random),
             "cplx_arg" => Func::UnaryCplx(Self::cplx_arg),
@@ -544,6 +551,10 @@ impl VirtualTable {
 
     pub extern "C" fn stable_divide(x: f64, y: f64) -> f64 {
         x / y
+    }
+
+    pub extern "C" fn stable_root(x: f64) -> f64 {
+        x.sqrt()
     }
 
     /************** Complex Functions ***************/
@@ -745,11 +756,25 @@ impl VirtualTable {
         *z = Complex::new(xr, xi).atanh();
     }
 
-    /*
     pub extern "C" fn cplx_root(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = Complex::new(xr, xi).sqrt();
+        if xi == 0.0 || !xr.is_finite() || !xi.is_finite() {
+            *z = Complex::new(xr, xi).sqrt();
+            return;
+        }
+        // An even binary scale keeps both the norm and the half-sum normal.
+        // Recover the smaller component from the original imaginary part:
+        // normalizing both output components would erase finite tiny companions.
+        let (_, exponent) = finite_parts(xr.abs().max(xi.abs()));
+        let half_exponent = exponent.div_euclid(2);
+        let re = scale_binary(xr, -2 * half_exponent);
+        let im = scale_binary(xi, -2 * half_exponent);
+        let larger = scale_binary(((re.hypot(im) + re.abs()) * 0.5).sqrt(), half_exponent);
+        *z = if xr >= 0.0 {
+            Complex::new(larger, xi / (2.0 * larger))
+        } else {
+            Complex::new(xi.abs() / (2.0 * larger), larger.copysign(xi))
+        };
     }
-    */
 
     pub extern "C" fn cplx_cbrt(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).cbrt();

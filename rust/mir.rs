@@ -1219,6 +1219,13 @@ impl Mir {
     }
 
     pub fn find_op(&self, op: &str) -> Result<Func> {
+        if VirtualTable::is_internal_name(op) {
+            return if self.config.is_complex() && !op.starts_with("cplx_") {
+                VirtualTable::from_str(&format!("cplx_{op}"))
+            } else {
+                VirtualTable::from_str(op)
+            };
+        }
         // `Mir::rerun` turns a call of a recursive function into a call of `@self`, which
         // the complexifier replays through `Mir::call`
         if op == "@self" {

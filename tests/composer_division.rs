@@ -105,6 +105,39 @@ fn division_instruction_round_trips_through_text_and_json() -> anyhow::Result<()
 }
 
 #[test]
+fn select_instruction_accepts_both_wire_formats_without_inactive_nan_leaks() -> anyhow::Result<()> {
+    let sources = [
+        "([('select', ('out', 0), ('param', 0), ('param', 1), ('param', 2))],0,[])",
+        r#"[[{"Select":[{"Out":0},{"Param":0},{"Param":1},{"Param":2}]}],0,[]]"#,
+    ];
+    for direct in [false, true] {
+        for source in sources {
+            let mut config = base_config();
+            config.set_direct(direct);
+            let app = Compiler::with_config(config)
+                .translate(source.into(), 3)?
+                .seal()?;
+            assert_eq!(app.evaluate_single::<f64>(&[0., f64::NAN, 7.]), 7.);
+            assert_eq!(app.evaluate_single::<f64>(&[1., 11., f64::NAN]), 11.);
+            #[cfg(target_arch = "x86_64")]
+            if is_x86_feature_detected!("avx") {
+                let mut output = [wide::f64x4::ZERO];
+                app.evaluate(
+                    &[
+                        wide::f64x4::from([0., 1., 0., -1.]),
+                        wide::f64x4::from([f64::NAN, 11., f64::NAN, 13.]),
+                        wide::f64x4::from([7., f64::NAN, 9., f64::NAN]),
+                    ],
+                    &mut output,
+                );
+                assert_eq!(output[0].to_array(), [7., 11., 9., 13.]);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn complex_over_real_division_preserves_subnormal_ratios() -> anyhow::Result<()> {
     for direct in [false, true] {
         for (fast_complex, denominator_is_real) in

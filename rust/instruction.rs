@@ -63,6 +63,7 @@ pub enum Instruction {
     /// A position in the instruction list to jump to.
     Label(usize),
     /// `Join(o, cond, t, f)` means `o = cond ? t : f`.
+    #[serde(alias = "Select")]
     Join(Slot, Slot, Slot, Slot),
 }
 

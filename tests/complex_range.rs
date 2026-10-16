@@ -1,7 +1,139 @@
 mod common;
 
 use common::base_config;
-use symjit::{Compiler, Complex, Composer, Expr, Slot, Translator};
+use symjit::{Compiler, Complex, Composer, Defuns, Expr, Slot, Translator};
+
+#[test]
+fn generated_complex_math_does_not_capture_user_callback_names() -> anyhow::Result<()> {
+    for direct in [false, true] {
+        let mut callbacks = Defuns::new();
+        callbacks.add_sliced_func::<Complex<f64>>(
+            "stable_divide",
+            Box::new(|_| Complex::new(17., 2.)),
+        )?;
+        callbacks
+            .add_sliced_func::<Complex<f64>>("stable_abs", Box::new(|_| Complex::new(19., 3.)))?;
+        for name in [
+            "__symjit_divide",
+            "__symjit_abs",
+            "__symjit_root",
+            "cplx___symjit_root",
+            "__symjit_future",
+        ] {
+            assert!(callbacks
+                .add_sliced_func::<f64>(name, Box::new(|_| 0.))
+                .is_err());
+        }
+        let mut config = base_config();
+        config.set_complex(true);
+        config.set_direct(direct);
+        config.set_defuns(callbacks);
+        let mut translator = Translator::new(config);
+        translator.set_num_params(2);
+        translator.append_div(
+            &Slot::Out(0),
+            &Slot::Param(0),
+            &Slot::Param(1),
+            false,
+            false,
+        )?;
+        translator.append_fun(&Slot::Out(1), "abs", &[Slot::Param(0)], false)?;
+        translator.append_fun(
+            &Slot::Out(2),
+            "stable_divide",
+            &[Slot::Param(0), Slot::Param(1)],
+            false,
+        )?;
+        translator.append_fun(&Slot::Out(3), "stable_abs", &[Slot::Param(0)], false)?;
+        let app = translator.compile()?.seal()?;
+        let mut output = [Complex::default(); 4];
+        app.evaluate(&[Complex::new(3., 4.), Complex::new(1., -2.)], &mut output);
+        assert_eq!(
+            output,
+            [
+                Complex::new(-1., 2.),
+                Complex::new(5., 0.),
+                Complex::new(17., 2.),
+                Complex::new(19., 3.)
+            ]
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn complex_root_preserves_range_and_the_small_companion() -> anyhow::Result<()> {
+    let tiny_root = f64::from_bits(1).sqrt() * 0.5f64.sqrt();
+    for direct in [false, true] {
+        for fast in [false, true] {
+            let mut config = base_config();
+            config.set_direct(direct);
+            config.set_complex(true);
+            config.set_fast_complex(fast);
+            let mut translator = Translator::new(config);
+            translator.set_num_params(1);
+            translator.append_fun(&Slot::Out(0), "root", &[Slot::Param(0)], false)?;
+            let app = translator.compile()?.seal()?;
+            for (input, expected) in [
+                (Complex::new(1e-200, 0.), Complex::new(1e-100, 0.)),
+                (
+                    Complex::new(0., f64::from_bits(1)),
+                    Complex::new(tiny_root, tiny_root),
+                ),
+                (Complex::new(1e308, 1e-100), Complex::new(1e154, 5e-255)),
+                (Complex::new(-1e308, 1e-100), Complex::new(5e-255, 1e154)),
+                (Complex::new(-1e308, -1e-100), Complex::new(5e-255, -1e154)),
+                (
+                    Complex::new(1e308, 1e308),
+                    Complex::new(
+                        1e154 * ((2.0f64.sqrt() + 1.) / 2.).sqrt(),
+                        1e154 * ((2.0f64.sqrt() - 1.) / 2.).sqrt(),
+                    ),
+                ),
+                (Complex::new(-4., -0.), Complex::new(0., -2.)),
+            ] {
+                let mut output = [Complex::default()];
+                app.evaluate(&[input], &mut output);
+                for (actual, expected) in [output[0].re, output[0].im]
+                    .into_iter()
+                    .zip([expected.re, expected.im])
+                {
+                    assert!(
+                        (actual - expected).abs() <= 8. * f64::EPSILON * expected.abs(),
+                        "direct={direct}, fast={fast}, sqrt({input}): {actual} != {expected}"
+                    );
+                }
+            }
+            #[cfg(target_arch = "x86_64")]
+            if is_x86_feature_detected!("avx") {
+                assert!(app.compiled_simd.is_some());
+                let mut output = [Complex::new(wide::f64x4::ZERO, wide::f64x4::ZERO)];
+                app.evaluate(
+                    &[Complex::new(
+                        wide::f64x4::from([1e-200, 1e308, -1e308, 0.]),
+                        wide::f64x4::from([0., 1e-100, 1e-100, f64::from_bits(1)]),
+                    )],
+                    &mut output,
+                );
+                for (actual, expected) in output[0]
+                    .re
+                    .to_array()
+                    .into_iter()
+                    .chain(output[0].im.to_array())
+                    .zip([
+                        1e-100, 1e154, 5e-255, tiny_root, 0., 5e-255, 1e154, tiny_root,
+                    ])
+                {
+                    assert!(
+                        (actual - expected).abs() <= 8. * f64::EPSILON * expected.abs(),
+                        "SIMD direct={direct}, fast={fast}: {actual} != {expected}"
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
 
 #[test]
 fn complex_range_calls_preserve_surrounding_expression_values() -> anyhow::Result<()> {

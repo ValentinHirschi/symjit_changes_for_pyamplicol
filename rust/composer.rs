@@ -273,10 +273,10 @@ impl DirectTranslator {
         args: &[Slot],
         is_real: bool,
     ) -> Result<()> {
-        let op = if self.mir.config.is_complex() && op == "abs" {
-            "stable_abs"
-        } else {
-            op
+        let op = match (self.mir.config.is_complex(), op) {
+            (true, "abs") => "__symjit_abs",
+            (true, "root") => "__symjit_root",
+            _ => op,
         };
         let n = args.len();
         self.mark_real(lhs, is_real);
@@ -397,7 +397,7 @@ impl Composer for DirectTranslator {
             // boundary; complex division needs range-safe component arithmetic.
             return self.append_fun_generic(
                 lhs,
-                "stable_divide",
+                "__symjit_divide",
                 &[*numerator, *denominator],
                 numerator_is_real && denominator_is_real,
             );

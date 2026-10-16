@@ -230,8 +230,12 @@ impl Builder {
     }
 
     pub fn create_unary(&mut self, op: Operation, arg: Node) -> Result<Node> {
-        if self.config.is_complex() && op.as_str() == "abs" {
-            return self.add_unary(Operation::new("stable_abs"), arg);
+        if self.config.is_complex() {
+            match op.as_str() {
+                "abs" => return self.add_unary(Operation::new("__symjit_abs"), arg),
+                "root" => return self.add_unary(Operation::new("__symjit_root"), arg),
+                _ => {}
+            }
         }
         Ok(self.block().create_unary(op, arg))
     }
@@ -246,7 +250,7 @@ impl Builder {
 
     pub fn create_binary(&mut self, op: Operation, left: Node, right: Node) -> Result<Node> {
         if self.config.is_complex() && op.is_divide() {
-            return self.add_binary(Operation::new("stable_divide"), left, right);
+            return self.add_binary(Operation::new("__symjit_divide"), left, right);
         }
         let node = match &op {
             Operation::Times if left.is_const(-1.0) => {
