@@ -109,6 +109,11 @@ impl Application {
             original = Some(mir.clone());
             let complexified = Complexifier::new(&reals, config.clone()).complexify(&mir)?;
 
+            // stable_math appends its constants (`mir.consts` starts as a copy of these)
+            if complexified.consts.len() > prog.builder.consts.len() {
+                prog.builder.consts = complexified.consts.clone();
+            }
+
             if config.fast_complex() {
                 /*
                 let mut c = config.clone();

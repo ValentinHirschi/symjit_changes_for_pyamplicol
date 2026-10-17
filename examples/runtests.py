@@ -356,6 +356,9 @@ def cases():
     dtypes = ["float64"]
     if use_complex:
         dtypes.append("complex128")
+        l = [False, True]
+    else:
+        l = [False]
 
     if arch() == "amd":
         for dtype in dtypes:
@@ -365,22 +368,24 @@ def cases():
                     for use_threads in [False, True]:
                         for cse in [False, True]:
                             for fastmath in [False, True]:
-                                for fast_complex in [False, True]:
-                                    for opt_level in [0, 1, 2, 3]:
-                                        args = {
-                                            "backend": "rust",
-                                            "ty": ty,
-                                            "use_simd": use_simd != "f64",
-                                            "enable_simd512": use_simd == "f64x8",
-                                            "use_threads": use_threads,
-                                            "cse": cse,
-                                            "fastmath": fastmath,
-                                            "fast_complex": fast_complex,
-                                            "opt_level": opt_level,
-                                            "dtype": dtype,
-                                        }
-                                        s = f"d={abbr_dtype(dtype)},y={abbr_ty(ty)}:s={use_simd}:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)}:x={Ω(fast_complex)},O={opt_level}"
-                                        cases.append((s, args))
+                                for fast_complex in l:
+                                    for stable_math in l:
+                                        for opt_level in [0, 1, 2, 3]:
+                                            args = {
+                                                "backend": "rust",
+                                                "ty": ty,
+                                                "use_simd": use_simd != "f64",
+                                                "enable_simd512": use_simd == "f64x8",
+                                                "use_threads": use_threads,
+                                                "cse": cse,
+                                                "fastmath": fastmath,
+                                                "fast_complex": fast_complex,
+                                                "stable_math": stable_math,
+                                                "opt_level": opt_level,
+                                                "dtype": dtype,
+                                            }
+                                            s = f"d={abbr_dtype(dtype)},y={abbr_ty(ty)}:s={use_simd}:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)}:x={Ω(fast_complex)},m={Ω(stable_math)},O={opt_level}"
+                                            cases.append((s, args))
     else:
         for dtype in dtypes:
             for ty in ["native", "bytecode", "debug"]:
@@ -388,21 +393,22 @@ def cases():
                     for use_threads in [False, True]:
                         for cse in [False, True]:
                             for fastmath in [False, True]:
-                                for fast_complex in [False, True]:
-                                    for opt_level in [0, 1, 2, 3]:
-                                        args = {
-                                            "backend": "rust",
-                                            "ty": ty,
-                                            "use_simd": use_simd,
-                                            "use_threads": use_threads,
-                                            "cse": cse,
-                                            "fastmath": fastmath,
-                                            "fast_complex": fast_complex,
-                                            "opt_level": opt_level,
-                                            "dtype": dtype,
-                                        }
-                                        s = f"d={abbr_dtype(dtype)},y={abbr_ty(ty)}:s={Ω(use_simd)}:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)}:x={Ω(fast_complex)},O={opt_level}"
-                                        cases.append((s, args))
+                                for fast_complex in l:
+                                    for stable_math in l:
+                                        for opt_level in [0, 1, 2, 3]:
+                                            args = {
+                                                "backend": "rust",
+                                                "ty": ty,
+                                                "use_simd": use_simd,
+                                                "use_threads": use_threads,
+                                                "cse": cse,
+                                                "fastmath": fastmath,
+                                                "fast_complex": fast_complex,
+                                                "opt_level": opt_level,
+                                                "dtype": dtype,
+                                            }
+                                            s = f"d={abbr_dtype(dtype)},y={abbr_ty(ty)}:s={Ω(use_simd)}:t={Ω(use_threads)}:c={Ω(cse)}:f={Ω(fastmath)}:x={Ω(fast_complex)},m={Ω(stable_math)},O={opt_level}"
+                                            cases.append((s, args))
     return cases
 
 
@@ -415,6 +421,7 @@ def test_model(f, label, pyback=True, bytecode=False, may_complex=True):
     # print("\tc: cse\t\t(True/False)")
     # print("\tf: fastmath\t(True/False)")
     # print("\tx: fast_complex\t(True/False)")
+    # print("\tm: stable_math\t(True/False)")
     # print("\tO: opt_level\t(0/1/2/3)")
 
     print("\tlambdify.......\t", end="")
@@ -484,6 +491,7 @@ def print_stats(table):
         print(f'\tcse:          {tobulate(table, "cse", False, "complex128")} vs {tobulate(table, "cse", True, "complex128")}')
         print(f'\tfastmath:     {tobulate(table, "fastmath", False, "complex128")} vs {tobulate(table, "fastmath", True, "complex128")}')
         print(f'\tfast_complex: {tobulate(table, "fast_complex", False, "complex128")} vs {tobulate(table, "fast_complex", True, "complex128")}')
+        print(f'\tstable_math:  {tobulate(table, "stable_math", False, "complex128")} vs {tobulate(table, "stable_math", True, "complex128")}')
         print(f"""\topt_level:
             \t0: {tobulate(table, "opt_level", 0, "complex128")}
             \t1: {tobulate(table, "opt_level", 1, "complex128")}

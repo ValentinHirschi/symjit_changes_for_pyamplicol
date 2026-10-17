@@ -122,93 +122,6 @@ fn recip(w: Complex<f64>) -> Complex<f64> {
     }
 }
 
-// Keep the exponent separate while forming complex products. Scaling an entire
-// complex operand by its largest component can erase a small companion before
-// division brings it back into range.
-fn finite_parts(value: f64) -> (f64, i32) {
-    if value == 0.0 {
-        return (value, 0);
-    }
-    let mut value = value;
-    let mut adjustment = 0;
-    if value.is_subnormal() {
-        value *= (1u64 << 54) as f64;
-        adjustment = -54;
-    }
-    let bits = value.to_bits();
-    let exponent = ((bits >> 52) & 0x7ff) as i32 - 1023 + adjustment;
-    let mantissa = f64::from_bits((bits & 0x800f_ffff_ffff_ffff) | (1023u64 << 52));
-    (mantissa, exponent)
-}
-
-fn scale_binary(mut value: f64, mut exponent: i32) -> f64 {
-    // Multiplications by normal powers of two are exact until the final
-    // rounding. Leave 53 bits of headroom before producing subnormal results.
-    while exponent > 1023 {
-        value *= f64::from_bits(2046u64 << 52);
-        exponent -= 1023;
-    }
-    while exponent < -1022 {
-        value *= f64::from_bits(54u64 << 52); // 2^(-1022+53)
-        exponent += 969;
-    }
-    value * f64::from_bits(((exponent + 1023) as u64) << 52)
-}
-
-fn finite_product_sum(a: f64, b: f64, c: f64, d: f64) -> (f64, i32) {
-    let (a, ea) = finite_parts(a);
-    let (b, eb) = finite_parts(b);
-    let (c, ec) = finite_parts(c);
-    let (d, ed) = finite_parts(d);
-    let left = a * b;
-    let right = c * d;
-    if left == 0.0 && right == 0.0 {
-        return (left + right, 0);
-    }
-    if left == 0.0 {
-        return (right, ec + ed);
-    }
-    if right == 0.0 {
-        return (left, ea + eb);
-    }
-    let exponent = (ea + eb).max(ec + ed);
-    (
-        scale_binary(left, ea + eb - exponent) + scale_binary(right, ec + ed - exponent),
-        exponent,
-    )
-}
-
-fn divide_complex(x: Complex<f64>, y: Complex<f64>) -> Complex<f64> {
-    // These branches also retain signed zeros and independently finite
-    // components when the other quotient component genuinely overflows.
-    if y.im == 0.0 {
-        return Complex::new(x.re / y.re, x.im / y.re);
-    }
-    if y.re == 0.0 {
-        return Complex::new(x.im / y.im, -x.re / y.im);
-    }
-    if ![x.re, x.im, y.re, y.im].into_iter().all(f64::is_finite) {
-        return x / y;
-    }
-    let lower = f64::from_bits(573u64 << 52); // 2^-450
-    let upper = f64::from_bits(1473u64 << 52); // 2^450
-    if [x.re, x.im, y.re, y.im]
-        .into_iter()
-        .all(|value| value == 0.0 || (lower..=upper).contains(&value.abs()))
-    {
-        return x / y;
-    }
-    let (denominator, denominator_exponent) = finite_product_sum(y.re, y.re, y.im, y.im);
-    let quotient = |a, b, c, d| {
-        let (numerator, exponent) = finite_product_sum(a, b, c, d);
-        scale_binary(numerator / denominator, exponent - denominator_exponent)
-    };
-    Complex::new(
-        quotient(x.re, y.re, x.im, y.im),
-        quotient(x.im, y.re, -x.re, y.im),
-    )
-}
-
 // tanh for the default (non-libm) build. `Complex::tanh` divides sinh(2x) by
 // cosh(2x) + cos(2y), which overflows to NaN for |x| > ~355 and cancels near the poles
 // z = i(k + 1/2)pi, where it lost up to 1e8 ulp (and hundreds of ulp for |x|, |y| < 3).
@@ -243,12 +156,6 @@ fn tan_c(z: Complex<f64>) -> Complex<f64> {
 pub struct VirtualTable;
 
 impl VirtualTable {
-    /// Names used by intrinsic lowering cannot be rebound to user callbacks.
-    pub(crate) fn is_internal_name(name: &str) -> bool {
-        name.strip_prefix("cplx_")
-            .unwrap_or(name)
-            .starts_with("__symjit_")
-    }
     /// The C math library (libm) function computing `op`, for object files; None if
     /// there is none (e.g. `csc`, `sinc`, complex functions). Note that symjit's `log`
     /// is the decimal logarithm and `ln` the natural one.
@@ -329,12 +236,7 @@ impl VirtualTable {
             "power" => Func::Binary(Self::power),
             "atan2" => Func::Binary(Self::atan2),
             "arg" => Func::Unary(Self::arg),
-            "__symjit_abs" => Func::Unary(Self::stable_abs),
-            "__symjit_divide" => Func::Binary(Self::stable_divide),
-            "__symjit_root" => Func::Unary(Self::stable_root),
             // Unary Complex Functions
-            "cplx___symjit_abs" => Func::UnaryCplx(Self::cplx_stable_abs),
-            "cplx___symjit_root" => Func::UnaryCplx(Self::cplx_root),
             "cplx_sin" => Func::UnaryCplx(Self::cplx_sin),
             "cplx_sinc" => Func::UnaryCplx(Self::cplx_sinc),
             "cplx_cos" => Func::UnaryCplx(Self::cplx_cos),
@@ -354,12 +256,12 @@ impl VirtualTable {
             "cplx_arcsinh" => Func::UnaryCplx(Self::cplx_asinh),
             "cplx_arccosh" => Func::UnaryCplx(Self::cplx_acosh),
             "cplx_arctanh" => Func::UnaryCplx(Self::cplx_atanh),
+            // "cplx_root" => Func::UnaryCplx(Self::cplx_root),
             "cplx_cbrt" => Func::UnaryCplx(Self::cplx_cbrt),
             "cplx_exp" => Func::UnaryCplx(Self::cplx_exp),
             "cplx_ln" => Func::UnaryCplx(Self::cplx_ln),
             "cplx_log" => Func::UnaryCplx(Self::cplx_log),
             // Complex Binary Functions
-            "cplx___symjit_divide" => Func::BinaryCplx(Self::cplx_stable_divide),
             "cplx_power" => Func::BinaryCplx(Self::cplx_power),
             "cplx_random" => Func::UnaryCplx(Self::cplx_random),
             "cplx_arg" => Func::UnaryCplx(Self::cplx_arg),
@@ -545,38 +447,7 @@ impl VirtualTable {
         0.0
     }
 
-    pub extern "C" fn stable_abs(x: f64) -> f64 {
-        x.abs()
-    }
-
-    pub extern "C" fn stable_divide(x: f64, y: f64) -> f64 {
-        x / y
-    }
-
-    pub extern "C" fn stable_root(x: f64) -> f64 {
-        x.sqrt()
-    }
-
     /************** Complex Functions ***************/
-
-    pub extern "C" fn cplx_stable_abs(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        let square = xr * xr + xi * xi;
-        // A normal sum of nonnegative squares cannot hide range loss in its
-        // leading term. Keep the ordinary hardware path; hypot handles tails,
-        // overflow, zeros and nonfinite values.
-        *z = Complex::new(
-            if square.is_normal() {
-                square.sqrt()
-            } else {
-                xr.hypot(xi)
-            },
-            0.0,
-        );
-    }
-
-    pub extern "C" fn cplx_stable_divide(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = divide_complex(Complex::new(xr, xi), *z);
-    }
 
     pub extern "C" fn cplx_sinc(xr: f64, xi: f64, z: &mut Complex<f64>) {
         let x = Complex::new(xr, xi);
@@ -767,30 +638,11 @@ impl VirtualTable {
         *z = Complex::new(xr, xi).atanh();
     }
 
+    /*
     pub extern "C" fn cplx_root(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        if xi == 0.0 || !xr.is_finite() || !xi.is_finite() {
-            *z = Complex::new(xr, xi).sqrt();
-            return;
-        }
-        // An even binary scale keeps both the norm and the half-sum normal.
-        // Recover the smaller component from the original imaginary part:
-        // normalizing both output components would erase finite tiny companions.
-        let square = xr * xr + xi * xi;
-        let larger = if square.is_normal() {
-            ((square.sqrt() + xr.abs()) * 0.5).sqrt()
-        } else {
-            let (_, exponent) = finite_parts(xr.abs().max(xi.abs()));
-            let half_exponent = exponent.div_euclid(2);
-            let re = scale_binary(xr, -2 * half_exponent);
-            let im = scale_binary(xi, -2 * half_exponent);
-            scale_binary(((re.hypot(im) + re.abs()) * 0.5).sqrt(), half_exponent)
-        };
-        *z = if xr >= 0.0 {
-            Complex::new(larger, xi / (2.0 * larger))
-        } else {
-            Complex::new(xi.abs() / (2.0 * larger), larger.copysign(xi))
-        };
+        *z = Complex::new(xr, xi).sqrt();
     }
+    */
 
     pub extern "C" fn cplx_cbrt(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(xr, xi).cbrt();
@@ -818,89 +670,5 @@ impl VirtualTable {
 
     pub extern "C" fn cplx_arg(xr: f64, xi: f64, z: &mut Complex<f64>) {
         *z = Complex::new(Complex::new(xr, xi).arg(), 0.0);
-    }
-}
-
-#[cfg(test)]
-mod range_tests {
-    use super::*;
-    use num_rational::BigRational;
-    use num_traits::ToPrimitive;
-
-    #[test]
-    fn complex_division_matches_exact_rational_components_across_finite_range() {
-        let minimum = f64::from_bits(1);
-        let mut inputs = vec![
-            (Complex::new(1e308, minimum), Complex::new(1., 0.)),
-            (Complex::new(minimum, 1e308), Complex::new(0., 1.)),
-            (Complex::new(1e308, minimum), Complex::new(1., minimum)),
-            (Complex::new(1e308, 1e308), Complex::new(1e-320, 1e-320)),
-            (Complex::new(minimum, minimum), Complex::new(1e308, 1e308)),
-            (Complex::new(1e-200, 1e200), Complex::new(1e200, 1e-200)),
-        ];
-        for scale in [minimum, 1e-320, 1e-200, 0.5, 1e200, 1e307] {
-            inputs.extend([
-                (
-                    Complex::new(3. * scale, 4. * scale),
-                    Complex::new(scale, -2. * scale),
-                ),
-                (Complex::new(scale, -scale), Complex::new(scale, scale)),
-                (Complex::new(scale, scale), Complex::new(scale, 0.)),
-            ]);
-        }
-        for (x, y) in inputs {
-            let exact = |value| BigRational::from_float(value).unwrap();
-            let (a, b, c, d) = (exact(x.re), exact(x.im), exact(y.re), exact(y.im));
-            let denominator = &c * &c + &d * &d;
-            let reference = [
-                ((&a * &c + &b * &d) / &denominator).to_f64().unwrap(),
-                ((&b * &c - &a * &d) / &denominator).to_f64().unwrap(),
-            ];
-            let result = divide_complex(x, y);
-            for (actual, expected) in [result.re, result.im].into_iter().zip(reference) {
-                if expected.is_infinite() || expected == 0.0 {
-                    assert_eq!(actual, expected, "{x}/{y}");
-                } else {
-                    assert!(
-                        (actual - expected).abs()
-                            <= 8. * f64::EPSILON * expected.abs() + 2. * minimum,
-                        "{x}/{y}: {actual} != {expected}"
-                    );
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn complex_range_callbacks_preserve_axes_and_magnitude() {
-        for (x, y) in [
-            (Complex::new(-0., 1e-320), Complex::new(-2., 0.)),
-            (Complex::new(1e308, -0.), Complex::new(0., -2.)),
-        ] {
-            let expected = if y.im == 0. {
-                Complex::new(x.re / y.re, x.im / y.re)
-            } else {
-                Complex::new(x.im / y.im, -x.re / y.im)
-            };
-            let mut actual = y;
-            VirtualTable::cplx_stable_divide(x.re, x.im, &mut actual);
-            assert_eq!(actual.re.to_bits(), expected.re.to_bits());
-            assert_eq!(actual.im.to_bits(), expected.im.to_bits());
-        }
-        for (re, im) in [
-            (0., -0.),
-            (1e-320, 0.),
-            (3e-200, 4e-200),
-            (3e200, 4e200),
-            (1e308, 1e308),
-            (f64::INFINITY, 1.),
-            (f64::NAN, 1.),
-        ] {
-            let mut actual = Complex::default();
-            VirtualTable::cplx_stable_abs(re, im, &mut actual);
-            let expected = re.hypot(im);
-            assert!(actual.re == expected || (actual.re.is_nan() && expected.is_nan()));
-            assert_eq!(actual.im.to_bits(), 0.0f64.to_bits());
-        }
     }
 }

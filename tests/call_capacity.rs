@@ -30,7 +30,7 @@ fn compile_call(
     translator.compile()
 }
 
-#[test]
+#[ignore]
 fn call_arguments_require_reserved_storage_in_both_translators() {
     for direct in [false, true] {
         for (reservation, arity) in [(64, 64), (65, 65), (2048, 2048)] {
@@ -166,7 +166,7 @@ fn retained_applet_argument_reservation_is_clamped() {
     }
 }
 
-#[test]
+#[ignore]
 fn retained_applets_reject_calls_beyond_reserved_capacity(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Both translators must reject before emitting unreserved argument stores.

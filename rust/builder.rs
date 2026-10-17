@@ -98,9 +98,6 @@ impl Builder {
     pub fn add_binary(&mut self, op: Operation, left: Node, right: Node) -> Result<Node> {
         if op.as_str() == "power" {
             if let Some(val) = right.as_int_const() {
-                if val < 0 {
-                    return self.create_powi(left, val);
-                }
                 if let Some(left) = left.as_const() {
                     return self.create_const(left.powi(val));
                 }
@@ -110,6 +107,21 @@ impl Builder {
                     1 => return Ok(left),
                     2 => return self.create_unary(Operation::new("square"), left),
                     3 => return self.create_unary(Operation::new("cube"), left),
+                    -1 => return self.create_unary(Operation::new("recip"), left),
+                    // invert first: x^n may overflow (or underflow) while x^-n is representable
+                    -2 | -3 if self.config.stable_math() => {
+                        let arg = self.create_unary(Operation::new("recip"), left)?;
+                        let op = if val == -2 { "square" } else { "cube" };
+                        return self.create_unary(Operation::new(op), arg);
+                    }
+                    -2 => {
+                        let arg = self.create_unary(Operation::new("square"), left)?;
+                        return self.create_unary(Operation::new("recip"), arg);
+                    }
+                    -3 => {
+                        let arg = self.create_unary(Operation::new("cube"), left)?;
+                        return self.create_unary(Operation::new("recip"), arg);
+                    }
                     _ => {
                         return self.create_powi(left, val);
                     }
@@ -224,34 +236,10 @@ impl Builder {
     }
 
     pub fn create_unary(&mut self, op: Operation, arg: Node) -> Result<Node> {
-        if self.config.is_complex() {
-            match op.as_str() {
-                "abs" => return self.add_unary(Operation::new("__symjit_abs"), arg),
-                "root" => return self.add_unary(Operation::new("__symjit_root"), arg),
-                "recip" => {
-                    let one = self.create_const(1.)?;
-                    return self.create_binary(Operation::Divide, one, arg);
-                }
-                _ => {}
-            }
-        }
         Ok(self.block().create_unary(op, arg))
     }
 
     pub fn create_powi(&mut self, arg: Node, power: i32) -> Result<Node> {
-        if power < 0 {
-            let positive = power
-                .checked_neg()
-                .ok_or_else(|| anyhow!("integer power magnitude exceeds i32::MAX"))?;
-            // Invert before exponentiation: the positive power may overflow
-            // while the requested inverse power is a finite subnormal.
-            let reciprocal = self.create_unary(Operation::new("recip"), arg)?;
-            return if positive == 1 {
-                Ok(reciprocal)
-            } else {
-                Ok(self.block().create_powi(reciprocal, positive))
-            };
-        }
         Ok(self.block().create_powi(arg, power))
     }
 
@@ -260,9 +248,6 @@ impl Builder {
     }
 
     pub fn create_binary(&mut self, op: Operation, left: Node, right: Node) -> Result<Node> {
-        if self.config.is_complex() && op.is_divide() {
-            return self.add_binary(Operation::new("__symjit_divide"), left, right);
-        }
         let node = match &op {
             Operation::Times if left.is_const(-1.0) => {
                 self.create_unary(Operation::new("neg"), right)?

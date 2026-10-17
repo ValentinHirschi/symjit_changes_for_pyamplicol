@@ -60,6 +60,13 @@ def process_argv():
         dest="compress",
         default=False,
     )
+    parser.add_argument(
+        "--stable_math",
+        help="Stable complex math",
+        action=argparse.BooleanOptionalAction,
+        dest="stable_math",
+        default=False,
+    )
     parser.add_argument("--dtype", help="data type", default="float64")
     parser.add_argument(
         "--opt_level",

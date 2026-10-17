@@ -37,6 +37,7 @@ fn complex_negative_integer_powers_preserve_finite_components_and_reload() -> an
             config.set_direct(direct);
             config.set_complex(true);
             config.set_fast_complex(fast_complex);
+            config.set_stable_math(true);
             for &(power, input, expected) in cases {
                 let mut translator = Translator::new(config.clone());
                 translator.set_num_params(1);
@@ -102,6 +103,7 @@ fn reciprocal_intrinsic_and_real_negative_powers_use_safe_ordering() -> anyhow::
             config.set_direct(direct);
             config.set_complex(true);
             config.set_fast_complex(fast_complex);
+            config.set_stable_math(true);
             let mut translator = Translator::new(config);
             translator.set_num_params(1);
             translator.append_fun(&Slot::Out(0), "recip", &[Slot::Param(0)], false)?;
@@ -118,6 +120,7 @@ fn reciprocal_intrinsic_and_real_negative_powers_use_safe_ordering() -> anyhow::
         ] {
             let mut config = base_config();
             config.set_direct(direct);
+            config.set_stable_math(true);
             let mut translator = Translator::new(config);
             translator.set_num_params(1);
             translator.append_pow(&Slot::Out(0), &Slot::Param(0), power, true)?;

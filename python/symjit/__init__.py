@@ -65,6 +65,7 @@ def compile_func(
     fast_complex: bool=True,
     huge: bool=False,
     parallel_mul: bool=True,
+    stable_math: bool=False,
     action: str="compile",
 ):
     """Compile a list of symbolic expression into an executable form.
@@ -102,6 +103,7 @@ def compile_func(
     fastmath (default `True`): use fastmath floating point operations, especially fused multiply-addition.
     fast_complex (default `True`): use f64x2 SIMD instructions for complex operations.
     parallel_mul (default `True`): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
+    stable_math (default `False`): range-safe complex division, `abs`, `sqrt` and negative integer powers.
     huge (default `False`): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
     compress (default `False`): compress binary size by converting inline operations to calls.
     compact (default `True`): compacts the stack frame by reusing temporary variables.
@@ -144,6 +146,7 @@ def compile_func(
             fast_complex=fast_complex,
             huge=huge,
             parallel_mul=parallel_mul,
+            stable_math=stable_math,
             action=action,
         )
     elif can_use_python(backend):
@@ -193,6 +196,7 @@ def compile_ode(
     fast_complex: bool=True,
     huge: bool=False,
     parallel_mul: bool=True,
+    stable_math: bool=False,
 ):
     """Compile a symbolic ODE model into an executable form suitable for
     passung to scipy.integrate.solve_ivp.
@@ -218,6 +222,7 @@ def compile_ode(
     fastmath (default `True`): use fastmath floating point operations, especially fused multiply-addition.
     fast_complex (default `True`): use f64x2 SIMD instructions for complex operations.
     parallel_mul (default `True`): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
+    stable_math (default `False`): range-safe complex division, `abs`, `sqrt` and negative integer powers.
     huge (default `False`): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
     compress (default `False`): compress binary size by converting inline operations to calls.
     compact (default `True`): compacts the stack frame by reusing temporary variables.
@@ -264,6 +269,7 @@ def compile_ode(
             fast_complex=fast_complex,
             huge=huge,
             parallel_mul=parallel_mul,
+            stable_math=stable_math,
             compress=compress,
             coroutines=coroutines,
             compact=compact,
@@ -298,6 +304,7 @@ def compile_jac(
     fast_complex: bool=True,
     huge: bool=False,
     parallel_mul: bool=True,
+    stable_math: bool=False,
     compress: bool=False,
     coroutines: bool=False,
     compact: bool=True,
@@ -321,6 +328,7 @@ def compile_jac(
         fastmath (default `True`): use fastmath floating point operations, especially fused multiply-addition.
         fast_complex (default `True`): use f64x2 SIMD instructions for complex operations.
         parallel_mul (default `True`): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
+        stable_math (default `False`): range-safe complex division, `abs`, `sqrt` and negative integer powers.
         huge (default `False`): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
         compress (default `False`): compress binary size by converting inline operations to calls.
         compact (default `True`): compacts the stack frame by reusing temporary variables.
@@ -353,6 +361,7 @@ def compile_jac(
             fast_complex=fast_complex,
             huge=huge,
             parallel_mul=parallel_mul,
+            stable_math=stable_math,
             compress=compress,
             coroutines=coroutines,
             compact=compact,
@@ -399,6 +408,7 @@ def compile_json(
     fast_complex: bool=True,
     huge: bool=False,
     parallel_mul: bool=True,
+    stable_math: bool=False,
     compress: bool=False,
     coroutines: bool=False,
     compact: bool=True,
@@ -426,6 +436,7 @@ def compile_json(
             fast_complex=fast_complex,
             huge=huge,
             parallel_mul=parallel_mul,
+            stable_math=stable_math,
             compress=compress,
             coroutines=coroutines,
             compact=compact,
@@ -464,6 +475,7 @@ def compile_evaluator(
     direct: bool=False,
     huge: bool=False,
     parallel_mul: bool=True,
+    stable_math: bool=False,
     compress: bool=False,
     coroutines: bool=False,
     compact: bool=True,
@@ -492,6 +504,7 @@ def compile_evaluator(
     fastmath (default `False`): use fastmath floating point operations, especially fused multiply-addition.
     fast_complex (default `True`): use f64x2 SIMD instructions for complex operations.
     parallel_mul (default `True`): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
+    stable_math (default `False`): range-safe complex division, `abs`, `sqrt` and negative integer powers.
     huge (default `False`): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
     compress (default `False`): compress binary size by converting inline operations to calls.
     compact (default `True`): compacts the stack frame by reusing temporary variables.
@@ -540,6 +553,7 @@ def compile_evaluator(
             direct=direct,
             huge=huge,
             parallel_mul=parallel_mul,
+            stable_math=stable_math,
             compress=compress,
             coroutines=coroutines,
             compact=compact,
@@ -565,6 +579,7 @@ def compile_evaluator(
             direct=direct,
             huge=huge,
             parallel_mul=parallel_mul,
+            stable_math=stable_math,
             compress=compress,
             coroutines=coroutines,
             compact=compact,
@@ -603,6 +618,7 @@ def compile_composer(
     direct: bool=True,
     huge: bool=False,
     parallel_mul: bool=True,
+    stable_math: bool=False,
     compress: bool=False,
     coroutines: bool=False,
     compact: bool=True,
@@ -631,6 +647,7 @@ def compile_composer(
     fastmath (default `False`): use fastmath floating point operations, especially fused multiply-addition.
     fast_complex (default `True`): use f64x2 SIMD instructions for complex operations.
     parallel_mul (default `True`): try f64x4 SIMD indtructions to convert serial to parallel complex multiplications.
+    stable_math (default `False`): range-safe complex division, `abs`, `sqrt` and negative integer powers.
     huge (default `False`): use huge (2 MB) pages instead of the standard 4 KB ones (only on Linux x86-64 machines).
     compress (default `False`): compress binary size by converting inline operations to calls.
     compact (default `True`): compacts the stack frame by reusing temporary variables.
@@ -678,6 +695,7 @@ def compile_composer(
         direct=direct,
         huge=huge,
         parallel_mul=parallel_mul,
+        stable_math=stable_math,
         compress=compress,
         coroutines=coroutines,
         compact=compact,

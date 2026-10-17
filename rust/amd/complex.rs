@@ -105,6 +105,141 @@ impl AmdComplexGenerator {
     fn predefined_consts(&mut self) {
         self.align();
         predefined_consts(&mut self.amd, 2);
+        if self.config.stable_math() {
+            stable_consts(&mut self.amd, 2);
+        }
+    }
+
+    /*********************** stable_math ***********************/
+
+    /// T1 := (p, p) with `p = (|re s|/2 + |im s|/2 + floor) & mask`, a power of two (see
+    /// `Complexifier::stable_exponent`). `s` is a physical register; T2 is clobbered.
+    fn stable_exponent(&mut self, s: u8, mask: &str, floor: &str) {
+        self.amd.vanddd_label(T1, s, "_not_minus_zero_");
+        self.amd.vmuldd_label(T1, T1, "_half_");
+        self.amd.vhadddd(T1, T1, T1);
+        self.amd.vmovdd_xmm_label(T2, floor);
+        self.amd.vadddd(T1, T1, T2);
+        self.amd.vanddd_label(T1, T1, mask);
+    }
+
+    /// T2 := (k, k) with `k = 0.5 / p`, which scales `max(|re s|, |im s|)` into [0.5, 2)
+    /// (`p ^ inf` is `2 / p` for a power of two, see `Complexifier::stable_divisor_scale`).
+    fn stable_divisor_scale(&mut self, s: u8) {
+        self.stable_exponent(s, "_stable_inf_", "_stable_floor_");
+        self.amd.vxordd_label(T2, T1, "_stable_inf_");
+        self.amd.vmuldd_label(T2, T2, "_stable_quarter_");
+    }
+
+    /// `divide` with both operands scaled by `stable_divisor_scale(s2)` (exact: the
+    /// instructions after the scaling are those of `divide`).
+    fn stable_divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
+        self.stable_divisor_scale(ϕ(s2));
+        self.amd.vmuldd(T1, ϕ(s2), T2); // (c', d')
+        self.amd.vmuldd(T2, ϕ(s1), T2); // (a', b')
+
+        self.amd.vunpckhdd(T0, T2, T2); // duplicate imag
+        self.amd.vmuldd(T0, T0, T1);
+        self.amd.vunpckldd(T2, T2, T2); // duplicate real
+        self.amd.vmuldd(T2, T2, T1);
+
+        self.amd.vmuldd(T1, T1, T1);
+        self.amd.vhadddd(T1, T1, T1);
+
+        self.amd.vshufdd(T2, T2, T2, 1); // exchange real/imag
+        self.amd.vaddsubdd(ϕ(dst), T0, T2);
+        self.amd.vshufdd(ϕ(dst), ϕ(dst), ϕ(dst), 1);
+        self.amd.vdivdd(ϕ(dst), ϕ(dst), T1);
+    }
+
+    /// `recip` of `s1 * k`: `(c k^2, -d k^2) / |s1 k|^2` (the products with `k` are exact
+    /// unless they underflow, when the result is subnormal anyway).
+    fn stable_recip(&mut self, dst: Reg, s1: Reg) {
+        self.stable_divisor_scale(ϕ(s1));
+        self.amd.vmuldd(T1, ϕ(s1), T2); // z' = z * k
+
+        self.amd.vmuldd(T0, T1, T1);
+        self.amd.vhadddd(T0, T0, T0); // |z'|^2
+        self.amd.vmuldd(T1, T1, T2); // z' * k
+
+        self.amd.vshufdd(T2, T1, T1, 1);
+        self.amd.vxordd(T1, T1, T1);
+        self.amd.vaddsubdd(T2, T1, T2);
+        self.amd.vshufdd(T2, T2, T2, 1);
+        self.amd.vdivdd(ϕ(dst), T2, T0);
+    }
+
+    /// `abs` of `s1 / p`, times `p`.
+    fn stable_abs(&mut self, dst: Reg, s1: Reg) {
+        self.stable_exponent(ϕ(s1), "_stable_mask_finite_", "_stable_floor_finite_");
+        self.amd.vxordd_label(T2, T1, "_stable_inf_");
+        self.amd.vmuldd_label(T2, T2, "_half_"); // k = 1 / p
+        self.amd.vmuldd(T2, ϕ(s1), T2);
+
+        self.amd.vmuldd(T2, T2, T2);
+        self.amd.vhadddd(T2, T2, T2);
+        self.amd.vsqrtsd(T2, T2);
+        self.amd.vmulsd(T2, T2, T1);
+        self.amd.vxorpd(T1, T1, T1);
+        self.amd.vunpckldd(ϕ(dst), T2, T1);
+    }
+
+    /// The body of `@complex_root` (argument and result in `Ret`) on `z / r^2` with a power
+    /// of two `r ~ sqrt(max(|re z|, |im z|))`; the imaginary part of the result is computed
+    /// from the original `im z`. The instructions after the scaling are those of `root`.
+    fn stable_root_body(&mut self) {
+        let s1 = ϕ(Reg::Ret);
+        let dst = ϕ(Reg::Ret);
+
+        self.stable_exponent(s1, "_stable_mask_finite_", "_stable_floor_finite_");
+        self.amd.vsqrtdd(T1, T1);
+        self.amd.vanddd_label(T1, T1, "_stable_mask_finite_"); // (r, r)
+
+        self.amd.vmovsd_xmm_label(T0, "_minus_zero_");
+        self.amd.vucomisd(s1, T0); // the flags for the jump below (the AVX code keeps them)
+
+        self.amd.vmuldd(T2, T1, T1);
+        self.amd.vxordd_label(T2, T2, "_stable_inf_");
+        self.amd.vmuldd_label(T2, T2, "_half_"); // k = 1 / r^2
+        self.amd.vmuldd(T2, s1, T2); // z' = z * k
+        self.amd.vshufdd(T1, T1, s1, 2); // T1 = (r, im z); `Ret` is free
+
+        self.amd.vmuldd_label(T2, T2, "_half_");
+        self.amd.vmulsd(s1, T2, T2);
+        self.amd.vunpckhdd(T0, T2, T2);
+        self.amd.vfmadd231sd(s1, T0, T0);
+        self.amd.vsqrtsd(s1, s1); // |z'| / 2
+
+        self.amd.vanddd_label(T2, T2, "_not_minus_zero_");
+        self.amd.vaddsd(s1, s1, T2);
+        self.amd.vsqrtsd(s1, s1); // t'
+        self.amd.vmulsd(s1, s1, T1); // t = t' * r
+
+        // imag(z) / t / 2: dividing first keeps a subnormal imag(z) (halving the smallest
+        // subnormal gives 0); in the normal range both orders give the same bits
+        self.amd.vunpckhdd(T2, T1, T1);
+        self.amd.vdivsd(T2, T2, s1);
+        self.amd.vmulsd_label(T2, T2, "_half_");
+
+        self.amd.vcmpeqsd(T0, T2, T2);
+        self.amd.vandpd(T2, T2, T0); // set T2 to 0 if it is NaN (if imag(s1) is 0)
+
+        self.amd.vunpckldd(T1, s1, s1);
+        self.amd.vmovsd_xmm_label(T0, "_minus_zero_");
+
+        self.amd.jnb("@complex_root_l1");
+
+        // real(s1) < 0
+        self.amd.vandpd(T0, T0, T2); // T0 = sign(T2)
+        self.amd.vxorpd(T1, T1, T0); // T1 = copysign(T2, T1)
+        self.amd.vxorpd(T2, T2, T0); // T2 = |T2|
+        self.amd.vunpckldd(dst, T2, T1); // T1 <-> T2
+        self.ret();
+
+        // real(s1) >= 0
+        self.set_label("@complex_root_l1");
+        self.amd.vunpckldd(dst, T1, T2);
+        self.ret();
     }
 }
 
@@ -283,6 +418,9 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn abs(&mut self, dst: Reg, s1: Reg) {
+        if self.config.stable_math() {
+            return self.stable_abs(dst, s1);
+        }
         self.amd.vmuldd(T1, ϕ(s1), ϕ(s1));
         self.amd.vhadddd(T1, T1, T1);
         self.amd.vsqrtsd(T2, T1);
@@ -321,6 +459,12 @@ impl Generator for AmdComplexGenerator {
             let dst = ϕ(Reg::Ret);
 
             self.set_label("@complex_root");
+
+            if self.config.stable_math() {
+                self.stable_root_body();
+                self.set_label("@jump_over_complex_root");
+                return;
+            }
 
             self.amd.vmuldd_label(s1, s1, "_half_");
             self.amd.vmulsd(T1, s1, s1);
@@ -368,6 +512,9 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
+        if self.config.stable_math() {
+            return self.stable_recip(dst, s1);
+        }
         self.amd.vshufdd(T1, ϕ(s1), ϕ(s1), 1);
         self.amd.vxorpd(T2, T2, T2);
         self.amd.vaddsubdd(T1, T2, T1);
@@ -421,6 +568,9 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
+        if self.config.stable_math() {
+            return self.stable_divide(dst, s1, s2);
+        }
         // `s2` is `Reg::Temp` (T0) for a constant divisor (`LoadConstMath` in `Mir::rerun`),
         // so both operands are read before T0 is written
         self.amd.vunpckldd(T1, ϕ(s1), ϕ(s1)); // duplicate real

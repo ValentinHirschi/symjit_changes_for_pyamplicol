@@ -169,6 +169,24 @@ fn predefined_consts(amd: &mut Amd, num_labels: usize) {
     }
 }
 
+/// The constants of `Config::stable_math` (only emitted when it is on, so the default code
+/// is unchanged): 2^-1022, the exponent mask (inf), 2^-1021, 2^1023 (the exponent mask
+/// without its lowest bit, which maps inf and NaN to a finite power of two), and 0.25.
+fn stable_consts(amd: &mut Amd, num_labels: usize) {
+    for (label, val) in [
+        ("_stable_floor_", f64::MIN_POSITIVE),
+        ("_stable_inf_", f64::INFINITY),
+        ("_stable_floor_finite_", f64::from_bits(0x0020_0000_0000_0000)),
+        ("_stable_mask_finite_", f64::from_bits(0x7fe0_0000_0000_0000)),
+        ("_stable_quarter_", 0.25),
+    ] {
+        amd.a.set_label(label);
+        for _ in 0..num_labels {
+            amd.a.append_quad(val.to_bits());
+        }
+    }
+}
+
 /*
  * fuse_load_math tries to fuse the last two instructions if
  * the last one is a math-op and the one before is a load

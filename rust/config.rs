@@ -45,9 +45,10 @@ pub const DIRECT_ARENA_OPERATION_SHIFT: usize = 25;
 pub const DEBUG_TOPOLOGY: u32 = 0x1000_0000;
 pub const DEBUG_INSTRUCTIONS: u32 = 0x2000_0000;
 pub const COROUTINES: u32 = 0x4000_0000;
+/// Range-safe complex division, abs, sqrt and negative integer powers (see `Config::stable_math`).
+pub const STABLE_MATH: u32 = 0x0800_0000;
 
 // remaining bits:
-// 0x0800_0000
 // 0x8000_0000
 
 pub const SPILL_AREA: usize = 16;
@@ -100,6 +101,7 @@ struct Options {
     stack_limit: usize,
     num_args: u32,
     coroutines: bool,
+    stable_math: bool,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -168,6 +170,9 @@ impl std::fmt::Debug for Config {
         }
         if self.coroutines() {
             write!(f, "coroutines, ")?;
+        }
+        if self.stable_math() {
+            write!(f, "stable_math, ")?;
         }
         if self.debug_bytecode() {
             write!(f, "debug_bytecode, ")?;
@@ -275,6 +280,7 @@ impl Config {
         config.set_stack_limit(c.options.stack_limit);
         config.set_num_args(c.options.num_args);
         config.set_coroutines(c.options.coroutines);
+        config.set_stable_math(c.options.stable_math);
 
         config.set_debug_bytecode(c.debug.bytecode);
         config.set_debug_scalar(c.debug.scalar);
@@ -321,6 +327,7 @@ impl Config {
             direct_arena: self.direct_arena(),
             direct_arena_identity_output: self.direct_arena_identity_output(),
             coroutines: self.coroutines(),
+            stable_math: self.stable_math(),
         };
 
         let debug: DebugOptions = DebugOptions {
@@ -345,9 +352,6 @@ impl Config {
     }
 
     pub fn set_defuns(&mut self, df: Defuns) {
-        for name in df.funcs.keys() {
-            Defuns::validate_name(name).expect("invalid user function name");
-        }
         match self.df {
             None => self.df = Some(Arc::new(df)),
             Some(_) => panic!("Config defuns can only be set once."),
@@ -469,6 +473,14 @@ impl Config {
 
     pub fn parallel_mul(&self) -> bool {
         self.test(PARALLEL_MUL)
+    }
+
+    /// Range-safe complex arithmetic: complex division (and `recip`), `abs` and `sqrt` scale
+    /// their operands by a power of two, so they do not overflow or underflow unless the result
+    /// does, and negative integer powers take the reciprocal before the power. The scaling is
+    /// exact, so results in the normal range keep the bits of the default code.
+    pub fn stable_math(&self) -> bool {
+        self.test(STABLE_MATH)
     }
 
     /// Uses pointer descriptors for scalar inputs to a direct arena application.
@@ -606,9 +618,7 @@ impl Config {
     }
 
     pub fn is_external_func(&self, op: &str) -> bool {
-        if VirtualTable::is_internal_name(op) {
-            false
-        } else if op == "@self" {
+        if op == "@self" {
             true
         } else if let Some(df) = &self.df {
             matches!(df.funcs.get(op), Some(Func::Slice { .. }))
@@ -619,9 +629,7 @@ impl Config {
     }
 
     pub fn is_kernel_func(&self, op: &str) -> bool {
-        if VirtualTable::is_internal_name(op) {
-            false
-        } else if op == "@self" {
+        if op == "@self" {
             true
         } else if let Some(df) = &self.df {
             matches!(
@@ -767,6 +775,13 @@ impl Config {
         }
     }
 
+    /// Enables range-safe complex arithmetic (see `stable_math`).
+    pub fn set_stable_math(&mut self, enabled: bool) {
+        if !self.debug_lock() {
+            self.opt = (self.opt & !STABLE_MATH) | if enabled { STABLE_MATH } else { 0 };
+        }
+    }
+
     /// Enables the direct arena scalar-input ABI.
     pub fn set_direct_arena(&mut self, enabled: bool) {
         self.opt = (self.opt & !DIRECT_ARENA) | if enabled { DIRECT_ARENA } else { 0 };
@@ -909,6 +924,9 @@ impl Config {
             }
             "coroutines" => {
                 self.set_coroutines(val.parse::<bool>()?);
+            }
+            "stable_math" => {
+                self.set_stable_math(val.parse::<bool>()?);
             }
             "opt_level" => {
                 self.set_opt_level(val.parse::<u8>()?);

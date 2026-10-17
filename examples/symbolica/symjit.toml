@@ -17,6 +17,7 @@ huge = false
 parallel_mul = true
 opt_level = 3
 coroutines = false
+stable_math = true
 
 [debug]
 bytecode = false

@@ -39,7 +39,7 @@ pub enum Instruction {
     Add(Slot, Vec<Slot>, usize),
     /// `Mul(o, [i0,...,i_n])` means `o = i0 * ... * i_n`.
     Mul(Slot, Vec<Slot>, usize),
-    /// `Div(o, n, d, nr, dr)` means `o = n / d`, preserving direct division.
+    /// `Div(o, n, d, nr, dr)` means `o = n / d`; `nr` and `dr` tell whether `n` and `d` are real.
     Div(Slot, Slot, Slot, bool, bool),
     /// `Pow(o, b, e)` means `o = b^e`.
     Pow(Slot, Slot, i64, bool),
@@ -63,7 +63,6 @@ pub enum Instruction {
     /// A position in the instruction list to jump to.
     Label(usize),
     /// `Join(o, cond, t, f)` means `o = cond ? t : f`.
-    #[serde(alias = "Select")]
     Join(Slot, Slot, Slot, Slot),
 }
 

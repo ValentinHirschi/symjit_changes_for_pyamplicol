@@ -16,7 +16,7 @@ pub trait Composer {
     fn append_constant(&mut self, z: Complex<f64>) -> Result<usize>;
     fn append_add(&mut self, lhs: &Slot, args: &[Slot], num_reals: usize) -> Result<()>;
     fn append_mul(&mut self, lhs: &Slot, args: &[Slot], num_reals: usize) -> Result<()>;
-    /// Divide directly, without first forming the denominator's reciprocal.
+    /// `lhs = numerator / denominator`, divided directly (not as a product with the reciprocal).
     fn append_div(
         &mut self,
         lhs: &Slot,
@@ -25,8 +25,7 @@ pub trait Composer {
         numerator_is_real: bool,
         denominator_is_real: bool,
     ) -> Result<()>;
-    /// Raise to an integer power with magnitude at most `i32::MAX`.
-    /// Larger magnitudes return an error before narrowing or code generation.
+    /// Raise to an integer power with magnitude at most `i32::MAX` (larger ones are an error).
     fn append_pow(&mut self, lhs: &Slot, arg: &Slot, p: i64, is_real: bool) -> Result<()>;
     fn append_powf(&mut self, lhs: &Slot, arg: &Slot, p: &Slot, is_real: bool) -> Result<()>;
     fn append_assign(&mut self, lhs: &Slot, rhs: &Slot) -> Result<()>;
@@ -200,8 +199,6 @@ impl DirectTranslator {
             Slot::Arg(_) => {
                 if let Some(Loc::Stack(i)) = self.as_loc(slot) {
                     self.mir.save_stack(src, i);
-                } else {
-                    return Err(anyhow!("argument slot {:?} is not reserved", slot));
                 }
             }
             _ => unreachable!(),
@@ -275,15 +272,6 @@ impl DirectTranslator {
         args: &[Slot],
         is_real: bool,
     ) -> Result<()> {
-        if self.mir.config.is_complex() && op == "recip" && args.len() == 1 {
-            let one = self.append_constant(Complex::new(1., 0.))?;
-            return self.append_div(lhs, &Slot::Const(one), &args[0], true, is_real);
-        }
-        let op = match (self.mir.config.is_complex(), op) {
-            (true, "abs") => "__symjit_abs",
-            (true, "root") => "__symjit_root",
-            _ => op,
-        };
         let n = args.len();
         self.mark_real(lhs, is_real);
 
@@ -319,14 +307,6 @@ impl DirectTranslator {
             self.compile_binary(op, reg(2), reg(0), reg(1))?;
             self.save(reg(2), lhs)?;
         } else {
-            if n > self.mir.config.num_args() as usize {
-                return Err(anyhow!(
-                    "function {:?} requires {} arguments, but only {} argument slots are reserved",
-                    op,
-                    n,
-                    self.mir.config.num_args()
-                ));
-            }
             for (i, arg) in args.iter().enumerate() {
                 self.load(reg(0), arg)?;
                 self.save(reg(0), &Slot::Arg(i))?;
@@ -397,35 +377,17 @@ impl Composer for DirectTranslator {
         denominator_is_real: bool,
     ) -> Result<()> {
         self.mark_real(numerator, numerator_is_real);
-        self.mark_real(denominator, denominator_is_real);
-        if self.mir.config.is_complex() {
-            // Use the ordinary call owner so allocation sees the clobber
-            // boundary; complex division needs range-safe component arithmetic.
-            return self.append_fun_generic(
-                lhs,
-                "__symjit_divide",
-                &[*numerator, *denominator],
-                numerator_is_real && denominator_is_real,
-            );
-        }
         self.load(reg(0), numerator)?;
+        self.mark_real(denominator, denominator_is_real);
         self.load(reg(1), denominator)?;
-        self.mir.divide(reg(2), reg(0), reg(1));
-        self.save(reg(2), lhs)
+        self.mir.divide(reg(0), reg(0), reg(1));
+        self.save(reg(0), lhs)?;
+        Ok(())
     }
 
     fn append_pow(&mut self, lhs: &Slot, arg: &Slot, p: i64, is_real: bool) -> Result<()> {
         if p.unsigned_abs() > i32::MAX as u64 {
             return Err(anyhow!("integer power magnitude exceeds i32::MAX"));
-        }
-        if p < 0 {
-            let one = self.append_constant(Complex::new(1., 0.))?;
-            self.append_div(lhs, &Slot::Const(one), arg, true, is_real)?;
-            return if p == -1 {
-                Ok(())
-            } else {
-                self.append_pow(lhs, lhs, -p, is_real)
-            };
         }
         self.mark_real(arg, is_real);
         self.load(reg(0), arg)?;
@@ -433,6 +395,7 @@ impl Composer for DirectTranslator {
         match p {
             2 => self.mir.square(reg(1), reg(0)),
             3 => self.mir.cube(reg(1), reg(0)),
+            -1 => self.mir.recip(reg(1), reg(0)),
             p => self.mir.powi(reg(1), reg(0), p as i32),
         }
         self.save(reg(1), lhs)?;

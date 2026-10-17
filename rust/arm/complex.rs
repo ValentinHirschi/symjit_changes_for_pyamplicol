@@ -11,6 +11,12 @@ use super::*;
 
 const REG_SIZE: u32 = 8;
 
+// the constants of `Config::stable_math` (see `Complexifier::stable_exponent`)
+const STABLE_INF: u64 = 0x7ff0_0000_0000_0000;
+const STABLE_FLOOR: u64 = 0x0010_0000_0000_0000; // 2^-1022
+const STABLE_MASK_FINITE: u64 = 0x7fe0_0000_0000_0000; // 2^1023
+const STABLE_FLOOR_FINITE: u64 = 0x0020_0000_0000_0000; // 2^-1021
+
 pub struct ArmComplexGenerator {
     a: Assembler,
     config: Config,
@@ -80,6 +86,135 @@ impl ArmComplexGenerator {
         self.load_stack(Reg::Ret, 0);
 
         Ok(())
+    }
+
+    /*********************** stable_math ***********************/
+
+    /// `d(reg) := f64::from_bits(bits)` for `bits` with only the top 16 bits set.
+    fn stable_bits(&mut self, reg: u8, bits: u64) {
+        debug_assert!(bits & 0x0000_ffff_ffff_ffff == 0);
+        self.emit(arm! {movz x(0), #0});
+        self.emit(arm! {movk_lsl48 x(0), #(bits >> 48) as u32});
+        self.emit(arm! {fmov d(reg), x(0)});
+    }
+
+    /// `d(T1) := p = (|re s|/2 + |im s|/2 + floor) & mask`, a power of two (see
+    /// `Complexifier::stable_exponent`). `s` is a physical register; T2 is clobbered.
+    fn stable_exponent(&mut self, s: u8, mask: u64, floor: u64) {
+        self.emit(arm! {fabs q(T1), q(s)});
+        self.emit(arm! {fmov q(T2), #0.5});
+        self.emit(arm! {fmul q(T1), q(T1), q(T2)});
+        self.emit(arm! {faddp d(T1), q(T1)});
+        self.stable_bits(T2, floor);
+        self.emit(arm! {fadd d(T1), d(T1), d(T2)});
+        self.stable_bits(T2, mask);
+        self.emit(arm! {and v(T1).8b, v(T1).8b, v(T2).8b});
+    }
+
+    /// `q(T2) := (k, k)` with `k = 0.5 / p`, which scales `max(|re s|, |im s|)` into [0.5, 2)
+    /// (`p ^ inf` is `2 / p` for a power of two, see `Complexifier::stable_divisor_scale`).
+    /// T0 is clobbered.
+    fn stable_divisor_scale(&mut self, s: u8) {
+        self.stable_exponent(s, STABLE_INF, STABLE_FLOOR);
+        self.stable_bits(T2, STABLE_INF);
+        self.emit(arm! {eor v(T2).8b, v(T1).8b, v(T2).8b});
+        self.emit(arm! {fmov q(T0), #0.5});
+        self.emit(arm! {fmul d(T2), d(T2), d(T0)});
+        self.emit(arm! {fmul d(T2), d(T2), d(T0)});
+        self.emit(arm! {dup q(T2), q(T2)[0]});
+    }
+
+    /// `divide` (the formula without FCMA) on both operands scaled by `stable_divisor_scale(s2)`;
+    /// the scaling is exact. The fused products `y1 y2 + x1 x2` and `x2 y1 - x1 y2` are
+    /// computed together, as `(x1 x2, x2 y1) + (y1, -x1) * y2`.
+    fn stable_divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
+        let dst = ϕ(dst);
+
+        self.stable_divisor_scale(ϕ(s2));
+        self.emit(arm! {fmul q(T1), q(ϕ(s2)), q(T2)}); // (x2, y2) scaled
+        self.emit(arm! {fmul q(T2), q(ϕ(s1)), q(T2)}); // (x1, y1) scaled
+
+        self.emit(arm! {ext q(dst), q(T2), q(T2), #8}); // (y1, x1)
+        self.stable_bits(T0, 0x8000_0000_0000_0000);
+        self.emit(arm! {ext q(T0), q(T0), q(T0), #8}); // (0, -0)
+        self.emit(arm! {eor v(dst).16b, v(dst).16b, v(T0).16b}); // (y1, -x1)
+        self.emit(arm! {fmul q(T0), q(T2), d(T1)[0]}); // (x1 x2, y1 x2)
+        self.emit(arm! {fmla q(T0), q(dst), d(T1)[1]}); // + (y1 y2, -x1 y2)
+
+        self.emit(arm! {dup q(T2), q(T1)[1]});
+        self.emit(arm! {fmul d(dst), d(T1), d(T1)});
+        self.emit(arm! {fmadd d(dst), d(T2), d(T2), d(dst)}); // x2^2 + y2^2
+        self.emit(arm! {dup q(dst), q(dst)[0]});
+        self.emit(arm! {fdiv q(dst), q(T0), q(dst)});
+    }
+
+    /// `recip` of `s1 * k`: `(x k^2, -y k^2) / |s1 k|^2` (the products with `k` are exact
+    /// unless they underflow, when the result is subnormal anyway).
+    fn stable_recip(&mut self, dst: Reg, s1: Reg) {
+        self.stable_divisor_scale(ϕ(s1));
+        self.emit(arm! {fmul q(T1), q(ϕ(s1)), q(T2)}); // z' = z * k
+
+        self.emit(arm! {fmul q(T0), q(T1), q(T1)});
+        self.emit(arm! {faddp d(T0), q(T0)}); // |z'|^2
+        self.emit(arm! {fmul q(T1), q(T1), q(T2)}); // z' * k
+
+        self.emit(arm! {zip2 q(T2), q(T1), q(T1)});
+        self.emit(arm! {fneg q(T2), q(T2)});
+        self.emit(arm! {zip1 q(T2), q(T1), q(T2)});
+        self.emit(arm! {dup q(T0), q(T0)[0]});
+        self.emit(arm! {fdiv q(ϕ(dst)), q(T2), q(T0)});
+    }
+
+    /// `abs` of `s1 / p`, times `p`.
+    fn stable_abs(&mut self, dst: Reg, s1: Reg) {
+        self.stable_exponent(ϕ(s1), STABLE_MASK_FINITE, STABLE_FLOOR_FINITE);
+        self.stable_bits(T2, STABLE_INF);
+        self.emit(arm! {eor v(T2).8b, v(T1).8b, v(T2).8b});
+        self.emit(arm! {fmov q(T0), #0.5});
+        self.emit(arm! {fmul d(T2), d(T2), d(T0)}); // k = 1 / p
+        self.emit(arm! {dup q(T2), q(T2)[0]});
+        self.emit(arm! {fmul q(T2), q(ϕ(s1)), q(T2)});
+
+        self.emit(arm! {fmul q(T2), q(T2), q(T2)});
+        self.emit(arm! {eor v(ϕ(dst)).16b, v(ϕ(dst)).16b, v(ϕ(dst)).16b});
+        self.emit(arm! {faddp d(ϕ(dst)), q(T2)});
+        self.emit(arm! {fsqrt d(ϕ(dst)), d(ϕ(dst))});
+        self.emit(arm! {fmul d(ϕ(dst)), d(ϕ(dst)), d(T1)});
+    }
+
+    /// The part of `@complex_root` (argument in `Temp`) that computes `d(T1) := t` and
+    /// `d(T2) := im(z) / t / 2` (with `d(T0) = 0.5`), on `z / r^2` for a power of two
+    /// `r ~ sqrt(max(|re z|, |im z|))`, as the default code does on `z`. `Ret` is a scratch
+    /// register (the funclet writes it last).
+    fn stable_root_body(&mut self) {
+        let s1 = ϕ(Reg::Temp);
+        let u = ϕ(Reg::Ret);
+
+        self.stable_exponent(s1, STABLE_MASK_FINITE, STABLE_FLOOR_FINITE);
+        self.emit(arm! {fsqrt d(T1), d(T1)});
+        self.stable_bits(T2, STABLE_MASK_FINITE);
+        self.emit(arm! {and v(T1).8b, v(T1).8b, v(T2).8b}); // r
+        self.emit(arm! {fmul d(T2), d(T1), d(T1)});
+        self.stable_bits(T0, STABLE_INF);
+        self.emit(arm! {eor v(T2).8b, v(T2).8b, v(T0).8b});
+        self.emit(arm! {fmov q(T0), #0.5});
+        self.emit(arm! {fmul d(T2), d(T2), d(T0)}); // k = 1 / r^2
+        self.emit(arm! {dup q(T2), q(T2)[0]});
+        self.emit(arm! {fmul q(u), q(s1), q(T2)}); // z' = z * k
+
+        self.emit(arm! {fmul q(T2), q(u), q(u)});
+        self.emit(arm! {faddp d(T2), q(T2)});
+        self.emit(arm! {fsqrt d(T2), d(T2)});
+        self.emit(arm! {fabs d(T0), d(u)});
+        self.emit(arm! {fadd d(T2), d(T2), d(T0)});
+        self.emit(arm! {fmov d(T0), #0.5});
+        self.emit(arm! {fmul d(T2), d(T2), d(T0)});
+        self.emit(arm! {fsqrt d(T2), d(T2)});
+        self.emit(arm! {fmul d(T1), d(T2), d(T1)}); // t = t' * r
+
+        self.emit(arm! {zip2 q(T2), q(s1), q(s1)});
+        self.emit(arm! {fdiv d(T2), d(T2), d(T1)});
+        self.emit(arm! {fmul d(T2), d(T2), d(T0)});
     }
 
     #[cfg(target_arch = "aarch64")]
@@ -266,6 +401,9 @@ impl Generator for ArmComplexGenerator {
     }
 
     fn abs(&mut self, dst: Reg, s1: Reg) {
+        if self.config.stable_math() {
+            return self.stable_abs(dst, s1);
+        }
         self.emit(arm! {fmul q(T2), q(ϕ(s1)), q(ϕ(s1))});
         self.emit(arm! {eor v(ϕ(dst)).16b, v(ϕ(dst)).16b, v(ϕ(dst)).16b});
         self.emit(arm! {faddp d(ϕ(dst)), q(T2)});
@@ -301,18 +439,22 @@ impl Generator for ArmComplexGenerator {
             let s1 = ϕ(Reg::Temp);
             let dst = ϕ(Reg::Ret);
 
-            self.emit(arm! {fmul q(T1), q(s1), q(s1)});
-            self.emit(arm! {faddp d(T1), q(T1)});
-            self.emit(arm! {fsqrt d(T1), d(T1)});
-            self.emit(arm! {fabs d(T2), d(s1)});
-            self.emit(arm! {fadd d(T1), d(T1), d(T2)});
-            self.emit(arm! {fmov d(T0), #0.5});
-            self.emit(arm! {fmul d(T1), d(T1), d(T0)});
-            self.emit(arm! {fsqrt d(T1), d(T1)});
+            if self.config.stable_math() {
+                self.stable_root_body();
+            } else {
+                self.emit(arm! {fmul q(T1), q(s1), q(s1)});
+                self.emit(arm! {faddp d(T1), q(T1)});
+                self.emit(arm! {fsqrt d(T1), d(T1)});
+                self.emit(arm! {fabs d(T2), d(s1)});
+                self.emit(arm! {fadd d(T1), d(T1), d(T2)});
+                self.emit(arm! {fmov d(T0), #0.5});
+                self.emit(arm! {fmul d(T1), d(T1), d(T0)});
+                self.emit(arm! {fsqrt d(T1), d(T1)});
 
-            self.emit(arm! {zip2 q(T2), q(s1), q(s1)});
-            self.emit(arm! {fdiv d(T2), d(T2), d(T1)});
-            self.emit(arm! {fmul d(T2), d(T2), d(T0)});
+                self.emit(arm! {zip2 q(T2), q(s1), q(s1)});
+                self.emit(arm! {fdiv d(T2), d(T2), d(T1)});
+                self.emit(arm! {fmul d(T2), d(T2), d(T0)});
+            }
 
             self.emit(arm! {fcmeq d(T0), d(T2), d(T2)});
             self.emit(arm! {and v(T2).8b, v(T2).8b, v(T0).8b});
@@ -338,6 +480,9 @@ impl Generator for ArmComplexGenerator {
     }
 
     fn recip(&mut self, dst: Reg, s1: Reg) {
+        if self.config.stable_math() {
+            return self.stable_recip(dst, s1);
+        }
         self.emit(arm! {zip2 q(T1), q(ϕ(s1)), q(ϕ(s1))});
         self.emit(arm! {fneg q(T1), q(T1)});
         self.emit(arm! {zip1 q(T1), q(ϕ(s1)), q(T1)});
@@ -407,6 +552,9 @@ impl Generator for ArmComplexGenerator {
     }
 
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
+        if self.config.stable_math() {
+            return self.stable_divide(dst, s1, s2);
+        }
         if self.config.compress() && self.supports_fcma() {
             self.emit(arm! {eor v(T1).16b, v(T1).16b, v(T1).16b});
             self.emit(arm! {fcmla q(T1), q(ϕ(s2)), q(ϕ(s1)), #0});

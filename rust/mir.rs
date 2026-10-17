@@ -821,31 +821,39 @@ impl Mir {
             self.divide(dst, dst, dst); // this is a generic way to make 1, but should be
                                         // overrided by the calling Generator for efficiency
         } else if power > 0 {
-            let t = power.trailing_zeros();
-            let mut n = power >> (t + 1);
-            let mut s = s1;
-
-            // nop is required to prevent a bug caused by load/mov peephole optimization
-            self.nop();
-
-            self.fmov(dst, s1);
-
-            while n > 0 {
-                self.times(Reg::Temp, s, s);
-                s = Reg::Temp;
-
-                if n & 1 != 0 {
-                    self.times(dst, dst, Reg::Temp);
-                };
-                n >>= 1;
-            }
-
-            for _ in 0..t {
-                self.times(dst, dst, dst);
-            }
+            self.powi_positive(dst, s1, power as u32);
+        } else if self.config.stable_math() {
+            // invert first: x^n may overflow (or underflow) while x^-n is representable
+            self.recip(dst, s1);
+            self.powi_positive(dst, dst, power.unsigned_abs());
         } else {
-            self.powi(dst, s1, -power);
+            self.powi_positive(dst, s1, power.unsigned_abs());
             self.recip(dst, dst);
+        }
+    }
+
+    fn powi_positive(&mut self, dst: Reg, s1: Reg, power: u32) {
+        let t = power.trailing_zeros();
+        let mut n = power >> (t + 1);
+        let mut s = s1;
+
+        // nop is required to prevent a bug caused by load/mov peephole optimization
+        self.nop();
+
+        self.fmov(dst, s1);
+
+        while n > 0 {
+            self.times(Reg::Temp, s, s);
+            s = Reg::Temp;
+
+            if n & 1 != 0 {
+                self.times(dst, dst, Reg::Temp);
+            };
+            n >>= 1;
+        }
+
+        for _ in 0..t {
+            self.times(dst, dst, dst);
         }
     }
 
@@ -1219,13 +1227,6 @@ impl Mir {
     }
 
     pub fn find_op(&self, op: &str) -> Result<Func> {
-        if VirtualTable::is_internal_name(op) {
-            return if self.config.is_complex() && !op.starts_with("cplx_") {
-                VirtualTable::from_str(&format!("cplx_{op}"))
-            } else {
-                VirtualTable::from_str(op)
-            };
-        }
         // `Mir::rerun` turns a call of a recursive function into a call of `@self`, which
         // the complexifier replays through `Mir::call`
         if op == "@self" {

@@ -16,6 +16,8 @@ fn complex_division_by_constant() -> Result<()> {
             config.set_complex(true);
             config.set_direct(direct);
             config.set_fast_complex(fast_complex);
+            config.set_stable_math(true);
+
             let mut t = Translator::new(config);
             t.set_num_params(1);
             let c = t.append_constant(Complex::new(4.0, 0.0))?;

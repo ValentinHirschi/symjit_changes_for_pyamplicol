@@ -252,7 +252,7 @@ impl Parser {
             "if_else" => self.parse_ifelse(),
             "goto" => self.parse_goto(),
             "label" => self.parse_label(),
-            "join" | "select" => self.parse_join(),
+            "join" => self.parse_join(),
             _ => return Err(anyhow!("unrecognized instruction")),
         };
 
