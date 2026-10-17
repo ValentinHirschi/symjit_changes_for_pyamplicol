@@ -404,6 +404,7 @@ def cases():
                                                 "cse": cse,
                                                 "fastmath": fastmath,
                                                 "fast_complex": fast_complex,
+                                                "stable_math": stable_math,
                                                 "opt_level": opt_level,
                                                 "dtype": dtype,
                                             }
