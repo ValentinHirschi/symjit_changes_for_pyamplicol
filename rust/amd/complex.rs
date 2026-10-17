@@ -148,6 +148,7 @@ impl AmdComplexGenerator {
 
         self.amd.vshufdd(T2, T2, T2, 1); // exchange real/imag
         self.amd.vaddsubdd(ϕ(dst), T0, T2);
+
         self.amd.vshufdd(ϕ(dst), ϕ(dst), ϕ(dst), 1);
         self.amd.vdivdd(ϕ(dst), ϕ(dst), T1);
     }
