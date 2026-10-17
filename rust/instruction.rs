@@ -39,6 +39,8 @@ pub enum Instruction {
     Add(Slot, Vec<Slot>, usize),
     /// `Mul(o, [i0,...,i_n])` means `o = i0 * ... * i_n`.
     Mul(Slot, Vec<Slot>, usize),
+    /// `Div(o, n, d, nr, dr)` means `o = n / d`, preserving direct division.
+    Div(Slot, Slot, Slot, bool, bool),
     /// `Pow(o, b, e)` means `o = b^e`.
     Pow(Slot, Slot, i64, bool),
     /// `Powf(o, b, e)` means `o = b^e`.
@@ -61,6 +63,7 @@ pub enum Instruction {
     /// A position in the instruction list to jump to.
     Label(usize),
     /// `Join(o, cond, t, f)` means `o = cond ? t : f`.
+    #[serde(alias = "Select")]
     Join(Slot, Slot, Slot, Slot),
 }
 
@@ -161,6 +164,25 @@ impl fmt::Display for Instruction {
                     num_reals
                 )
             }
+            Instruction::Div(
+                lhs,
+                numerator,
+                denominator,
+                numerator_is_real,
+                denominator_is_real,
+            ) => write!(
+                f,
+                "('div', {}, {}, {}, {}, {})",
+                lhs,
+                numerator,
+                denominator,
+                if *numerator_is_real { "True" } else { "False" },
+                if *denominator_is_real {
+                    "True"
+                } else {
+                    "False"
+                }
+            ),
             Instruction::Pow(lhs, arg, p, is_real) => write!(
                 f,
                 "('pow', {}, {}, {}, {})",

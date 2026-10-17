@@ -243,6 +243,7 @@ impl Parser {
         let inst = match self.parse_ident()?.as_str() {
             "add" => self.parse_add(),
             "mul" => self.parse_mul(),
+            "div" => self.parse_div(),
             "pow" => self.parse_pow(),
             "powf" => self.parse_powf(),
             "fun" => self.parse_fun(),
@@ -251,7 +252,7 @@ impl Parser {
             "if_else" => self.parse_ifelse(),
             "goto" => self.parse_goto(),
             "label" => self.parse_label(),
-            "join" => self.parse_join(),
+            "join" | "select" => self.parse_join(),
             _ => return Err(anyhow!("unrecognized instruction")),
         };
 
@@ -336,6 +337,26 @@ impl Parser {
         self.expects(Token::Comma)?;
         let n = self.parse_num()? as usize;
         Ok(Instruction::Mul(dst, args, n))
+    }
+
+    fn parse_div(&mut self) -> Result<Instruction> {
+        self.expects(Token::Comma)?;
+        let dst = self.parse_slot()?;
+        self.expects(Token::Comma)?;
+        let numerator = self.parse_slot()?;
+        self.expects(Token::Comma)?;
+        let denominator = self.parse_slot()?;
+        self.expects(Token::Comma)?;
+        let numerator_is_real = self.parse_bool()?;
+        self.expects(Token::Comma)?;
+        let denominator_is_real = self.parse_bool()?;
+        Ok(Instruction::Div(
+            dst,
+            numerator,
+            denominator,
+            numerator_is_real,
+            denominator_is_real,
+        ))
     }
 
     fn parse_pow(&mut self) -> Result<Instruction> {

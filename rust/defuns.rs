@@ -166,6 +166,15 @@ impl fmt::Debug for Defuns {
 }
 
 impl Defuns {
+    pub(crate) fn validate_name(name: &str) -> Result<()> {
+        if VirtualTable::is_internal_name(name) {
+            return Err(anyhow!(
+                "function name {name} is reserved for SymJIT intrinsic lowering"
+            ));
+        }
+        Ok(())
+    }
+
     pub fn new() -> Defuns {
         Defuns {
             funcs: HashMap::new(),
@@ -177,6 +186,7 @@ impl Defuns {
     /// p should points to a valid function
     ///
     pub unsafe fn add_func(&mut self, name: &str, p: *const usize, num_args: usize) {
+        Self::validate_name(name).expect("invalid user function name");
         match num_args {
             1 => {
                 let f: UnaryFunc = unsafe { std::mem::transmute(p) };
@@ -193,29 +203,35 @@ impl Defuns {
     }
 
     pub fn add_unary(&mut self, name: &str, f: UnaryFunc) {
+        Self::validate_name(name).expect("invalid user function name");
         self.funcs.insert(name.to_string(), Func::Unary(f));
     }
 
     pub fn add_binary(&mut self, name: &str, f: BinaryFunc) {
+        Self::validate_name(name).expect("invalid user function name");
         self.funcs.insert(name.to_string(), Func::Binary(f));
     }
 
     pub fn add_unary_complex(&mut self, name: &str, f: UnaryFuncCplx) {
+        Self::validate_name(name).expect("invalid user function name");
         self.funcs
             .insert(format!("cplx_{}", name), Func::UnaryCplx(f));
     }
 
     pub fn add_binary_complex(&mut self, name: &str, f: BinaryFuncCplx) {
+        Self::validate_name(name).expect("invalid user function name");
         self.funcs
             .insert(format!("cplx_{}", name), Func::BinaryCplx(f));
     }
 
     pub fn add_applet(&mut self, name: &str, app: Applet) {
+        Self::validate_name(name).expect("invalid user function name");
         self.funcs
             .insert(name.to_string(), Func::App(Box::new(app)));
     }
 
     pub fn add_self(&mut self, name: &str) {
+        Self::validate_name(name).expect("invalid user function name");
         self.funcs.insert(name.to_string(), Func::Recursive);
     }
 
@@ -223,6 +239,7 @@ impl Defuns {
     where
         T: Copy + Sized + Element,
     {
+        Self::validate_name(name)?;
         if VirtualTable::from_str(name).is_ok() {
             return Err(anyhow!("cannot redefine function {}.", name));
         }
@@ -306,6 +323,57 @@ impl Drop for RawBox {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn reserved_intrinsics_reject_registration_and_ignore_direct_map_shadowing() {
+        use super::*;
+        use crate::{config::Config, mir::Mir};
+
+        assert!(std::panic::catch_unwind(|| {
+            let mut functions = Defuns::new();
+            functions.add_unary("__symjit_abs", VirtualTable::sin);
+        })
+        .is_err());
+        assert!(std::panic::catch_unwind(|| {
+            let mut functions = Defuns::new();
+            functions
+                .funcs
+                .insert("__symjit_divide".into(), Func::Recursive);
+            Config::default().set_defuns(functions);
+        })
+        .is_err());
+
+        // The historical maps and config fields are public. Resolving an
+        // intrinsic must stay safe even if callers bypass registration methods.
+        let mut functions = Defuns::new();
+        functions.funcs.insert(
+            "__symjit_divide".into(),
+            Func::Slice {
+                f_scalar: std::ptr::null(),
+                f_simd: std::ptr::null(),
+                env: std::ptr::null(),
+            },
+        );
+        functions
+            .funcs
+            .insert("cplx___symjit_divide".into(), Func::Recursive);
+        let mut config = Config::default();
+        config.set_complex(true);
+        config.df = Some(std::sync::Arc::new(functions));
+        for name in ["__symjit_divide", "cplx___symjit_divide"] {
+            assert!(!config.is_kernel_func(name));
+            assert!(!config.is_external_func(name));
+        }
+        let mir = Mir::new(config);
+        for name in ["__symjit_divide", "cplx___symjit_divide"] {
+            let Func::BinaryCplx(function) = mir.find_op(name).unwrap() else {
+                panic!("reserved intrinsic resolved to a user function");
+            };
+            let mut result = Complex::new(1., -2.);
+            function(3., 4., &mut result);
+            assert_eq!(result, Complex::new(-1., 2.));
+        }
+    }
+
     use super::super::{
         compiler::Translator, composer::Composer, config::Config, instruction::Slot,
     };

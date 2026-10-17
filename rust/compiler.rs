@@ -408,6 +408,19 @@ impl Translator {
             match line {
                 Instruction::Add(lhs, args, num_reals) => self.append_add(lhs, args, *num_reals)?,
                 Instruction::Mul(lhs, args, num_reals) => self.append_mul(lhs, args, *num_reals)?,
+                Instruction::Div(
+                    lhs,
+                    numerator,
+                    denominator,
+                    numerator_is_real,
+                    denominator_is_real,
+                ) => self.append_div(
+                    lhs,
+                    numerator,
+                    denominator,
+                    *numerator_is_real,
+                    *denominator_is_real,
+                )?,
                 Instruction::Pow(lhs, arg, p, is_real) => {
                     self.append_pow(lhs, arg, *p, *is_real)?
                 }
@@ -471,6 +484,35 @@ impl Composer for Translator {
                 .push(Instruction::Mul(*lhs, args.to_vec(), num_reals).to_string());
         }
         self.composer.append_mul(lhs, args, num_reals)
+    }
+
+    fn append_div(
+        &mut self,
+        lhs: &Slot,
+        numerator: &Slot,
+        denominator: &Slot,
+        numerator_is_real: bool,
+        denominator_is_real: bool,
+    ) -> Result<()> {
+        if self.spy {
+            self.instructions.push(
+                Instruction::Div(
+                    *lhs,
+                    *numerator,
+                    *denominator,
+                    numerator_is_real,
+                    denominator_is_real,
+                )
+                .to_string(),
+            );
+        }
+        self.composer.append_div(
+            lhs,
+            numerator,
+            denominator,
+            numerator_is_real,
+            denominator_is_real,
+        )
     }
 
     fn append_pow(&mut self, lhs: &Slot, arg: &Slot, p: i64, is_real: bool) -> Result<()> {
@@ -632,7 +674,31 @@ impl Composer for IndirectTranslator {
         Ok(())
     }
 
+    fn append_div(
+        &mut self,
+        lhs: &Slot,
+        numerator: &Slot,
+        denominator: &Slot,
+        numerator_is_real: bool,
+        denominator_is_real: bool,
+    ) -> Result<()> {
+        let numerator = self.consume(numerator)?;
+        let denominator = self.consume(denominator)?;
+        let lhs = self.produce(lhs)?;
+        self.ssa.push(Instruction::Div(
+            lhs,
+            numerator,
+            denominator,
+            numerator_is_real,
+            denominator_is_real,
+        ));
+        Ok(())
+    }
+
     fn append_pow(&mut self, lhs: &Slot, arg: &Slot, p: i64, is_real: bool) -> Result<()> {
+        if p.unsigned_abs() > i32::MAX as u64 {
+            return Err(anyhow!("integer power magnitude exceeds i32::MAX"));
+        }
         let arg = self.consume(arg)?;
         let lhs = self.produce(lhs)?;
         self.ssa.push(Instruction::Pow(lhs, arg, p, is_real));
@@ -861,6 +927,18 @@ impl IndirectTranslator {
                 }
                 Instruction::Mul(lhs, args, n) => {
                     self.translate_nary(Operation::Times, lhs, args, *n)?
+                }
+                Instruction::Div(
+                    lhs,
+                    numerator,
+                    denominator,
+                    numerator_is_real,
+                    denominator_is_real,
+                ) => {
+                    let numerator = self.expr(numerator, *numerator_is_real);
+                    let denominator = self.expr(denominator, *denominator_is_real);
+                    let rhs = self.binary_node("divide", numerator, denominator)?;
+                    self.assign(lhs, rhs)?;
                 }
                 Instruction::Pow(lhs, arg, p, is_real) => {
                     let p = self.const_node(*p as f64);

@@ -345,6 +345,9 @@ impl Config {
     }
 
     pub fn set_defuns(&mut self, df: Defuns) {
+        for name in df.funcs.keys() {
+            Defuns::validate_name(name).expect("invalid user function name");
+        }
         match self.df {
             None => self.df = Some(Arc::new(df)),
             Some(_) => panic!("Config defuns can only be set once."),
@@ -603,7 +606,9 @@ impl Config {
     }
 
     pub fn is_external_func(&self, op: &str) -> bool {
-        if op == "@self" {
+        if VirtualTable::is_internal_name(op) {
+            false
+        } else if op == "@self" {
             true
         } else if let Some(df) = &self.df {
             matches!(df.funcs.get(op), Some(Func::Slice { .. }))
@@ -614,7 +619,9 @@ impl Config {
     }
 
     pub fn is_kernel_func(&self, op: &str) -> bool {
-        if op == "@self" {
+        if VirtualTable::is_internal_name(op) {
+            false
+        } else if op == "@self" {
             true
         } else if let Some(df) = &self.df {
             matches!(
