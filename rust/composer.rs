@@ -25,6 +25,8 @@ pub trait Composer {
         numerator_is_real: bool,
         denominator_is_real: bool,
     ) -> Result<()>;
+    /// Raise to an integer power with magnitude at most `i32::MAX`.
+    /// Larger magnitudes return an error before narrowing or code generation.
     fn append_pow(&mut self, lhs: &Slot, arg: &Slot, p: i64, is_real: bool) -> Result<()>;
     fn append_powf(&mut self, lhs: &Slot, arg: &Slot, p: &Slot, is_real: bool) -> Result<()>;
     fn append_assign(&mut self, lhs: &Slot, rhs: &Slot) -> Result<()>;
@@ -273,6 +275,10 @@ impl DirectTranslator {
         args: &[Slot],
         is_real: bool,
     ) -> Result<()> {
+        if self.mir.config.is_complex() && op == "recip" && args.len() == 1 {
+            let one = self.append_constant(Complex::new(1., 0.))?;
+            return self.append_div(lhs, &Slot::Const(one), &args[0], true, is_real);
+        }
         let op = match (self.mir.config.is_complex(), op) {
             (true, "abs") => "__symjit_abs",
             (true, "root") => "__symjit_root",
@@ -409,13 +415,24 @@ impl Composer for DirectTranslator {
     }
 
     fn append_pow(&mut self, lhs: &Slot, arg: &Slot, p: i64, is_real: bool) -> Result<()> {
+        if p.unsigned_abs() > i32::MAX as u64 {
+            return Err(anyhow!("integer power magnitude exceeds i32::MAX"));
+        }
+        if p < 0 {
+            let one = self.append_constant(Complex::new(1., 0.))?;
+            self.append_div(lhs, &Slot::Const(one), arg, true, is_real)?;
+            return if p == -1 {
+                Ok(())
+            } else {
+                self.append_pow(lhs, lhs, -p, is_real)
+            };
+        }
         self.mark_real(arg, is_real);
         self.load(reg(0), arg)?;
 
         match p {
             2 => self.mir.square(reg(1), reg(0)),
             3 => self.mir.cube(reg(1), reg(0)),
-            -1 => self.mir.recip(reg(1), reg(0)),
             p => self.mir.powi(reg(1), reg(0), p as i32),
         }
         self.save(reg(1), lhs)?;

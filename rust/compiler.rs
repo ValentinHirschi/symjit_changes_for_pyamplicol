@@ -696,6 +696,9 @@ impl Composer for IndirectTranslator {
     }
 
     fn append_pow(&mut self, lhs: &Slot, arg: &Slot, p: i64, is_real: bool) -> Result<()> {
+        if p.unsigned_abs() > i32::MAX as u64 {
+            return Err(anyhow!("integer power magnitude exceeds i32::MAX"));
+        }
         let arg = self.consume(arg)?;
         let lhs = self.produce(lhs)?;
         self.ssa.push(Instruction::Pow(lhs, arg, p, is_real));
