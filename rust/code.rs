@@ -560,7 +560,18 @@ impl VirtualTable {
     /************** Complex Functions ***************/
 
     pub extern "C" fn cplx_stable_abs(xr: f64, xi: f64, z: &mut Complex<f64>) {
-        *z = Complex::new(xr.hypot(xi), 0.0);
+        let square = xr * xr + xi * xi;
+        // A normal sum of nonnegative squares cannot hide range loss in its
+        // leading term. Keep the ordinary hardware path; hypot handles tails,
+        // overflow, zeros and nonfinite values.
+        *z = Complex::new(
+            if square.is_normal() {
+                square.sqrt()
+            } else {
+                xr.hypot(xi)
+            },
+            0.0,
+        );
     }
 
     pub extern "C" fn cplx_stable_divide(xr: f64, xi: f64, z: &mut Complex<f64>) {
@@ -764,11 +775,16 @@ impl VirtualTable {
         // An even binary scale keeps both the norm and the half-sum normal.
         // Recover the smaller component from the original imaginary part:
         // normalizing both output components would erase finite tiny companions.
-        let (_, exponent) = finite_parts(xr.abs().max(xi.abs()));
-        let half_exponent = exponent.div_euclid(2);
-        let re = scale_binary(xr, -2 * half_exponent);
-        let im = scale_binary(xi, -2 * half_exponent);
-        let larger = scale_binary(((re.hypot(im) + re.abs()) * 0.5).sqrt(), half_exponent);
+        let square = xr * xr + xi * xi;
+        let larger = if square.is_normal() {
+            ((square.sqrt() + xr.abs()) * 0.5).sqrt()
+        } else {
+            let (_, exponent) = finite_parts(xr.abs().max(xi.abs()));
+            let half_exponent = exponent.div_euclid(2);
+            let re = scale_binary(xr, -2 * half_exponent);
+            let im = scale_binary(xi, -2 * half_exponent);
+            scale_binary(((re.hypot(im) + re.abs()) * 0.5).sqrt(), half_exponent)
+        };
         *z = if xr >= 0.0 {
             Complex::new(larger, xi / (2.0 * larger))
         } else {

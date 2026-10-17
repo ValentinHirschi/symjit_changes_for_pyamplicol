@@ -75,6 +75,21 @@ fn complex_root_preserves_range_and_the_small_companion() -> anyhow::Result<()> 
             translator.append_fun(&Slot::Out(0), "root", &[Slot::Param(0)], false)?;
             let app = translator.compile()?.seal()?;
             for (input, expected) in [
+                (Complex::new(3., 4.), Complex::new(2., 1.)),
+                (
+                    Complex::new(1e-150, 1e-150),
+                    Complex::new(
+                        1e-75 * ((2.0f64.sqrt() + 1.) / 2.).sqrt(),
+                        1e-75 * ((2.0f64.sqrt() - 1.) / 2.).sqrt(),
+                    ),
+                ),
+                (
+                    Complex::new(1e-160, 1e-160),
+                    Complex::new(
+                        1e-80 * ((2.0f64.sqrt() + 1.) / 2.).sqrt(),
+                        1e-80 * ((2.0f64.sqrt() - 1.) / 2.).sqrt(),
+                    ),
+                ),
                 (Complex::new(1e-200, 0.), Complex::new(1e-100, 0.)),
                 (
                     Complex::new(0., f64::from_bits(1)),
