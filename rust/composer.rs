@@ -199,6 +199,8 @@ impl DirectTranslator {
             Slot::Arg(_) => {
                 if let Some(Loc::Stack(i)) = self.as_loc(slot) {
                     self.mir.save_stack(src, i);
+                } else {
+                    return Err(anyhow!("argument slot {:?} is not reserved", slot));
                 }
             }
             _ => unreachable!(),
@@ -307,6 +309,14 @@ impl DirectTranslator {
             self.compile_binary(op, reg(2), reg(0), reg(1))?;
             self.save(reg(2), lhs)?;
         } else {
+            if n > self.mir.config.num_args() as usize {
+                return Err(anyhow!(
+                    "function {:?} requires {} arguments, but only {} argument slots are reserved",
+                    op,
+                    n,
+                    self.mir.config.num_args()
+                ));
+            }
             for (i, arg) in args.iter().enumerate() {
                 self.load(reg(0), arg)?;
                 self.save(reg(0), &Slot::Arg(i))?;
