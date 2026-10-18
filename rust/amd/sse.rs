@@ -11,11 +11,31 @@ use super::*;
 
 const RET: u8 = 0;
 const REG_SIZE: u32 = 8;
+// Scratch slot for operations that would otherwise modify a source register: `s3` of an
+// emulated fused operation when it is also `dst`, and `s2` of a non-commutative operation
+// when it is also `dst` (`binop_nc`). These are the first slots of the spill area, which the x86
+// generators do not use (ARM/RISC-V keep call results there). `STACK` is 16-byte aligned, so
+// `andnpd` can read its 16 bytes.
+const SCRATCH: u32 = 0;
 
 macro_rules! binop {
-    ($self:ident, $sse:ident, $dst:expr, $s1: expr, $s2: expr, $com:ident) => {{
-        let (x, y) = $self.shrink($dst, $s1, $s2, $com);
+    ($self:ident, $sse:ident, $dst:expr, $s1: expr, $s2: expr) => {{
+        let (x, y) = $self.shrink($dst, $s1, $s2);
         $self.amd.$sse(ϕ(x), ϕ(y));
+    }};
+}
+
+// A non-commutative operation; `$mem` is its memory-operand form. When `dst == s2 != s1`,
+// `s2` is saved in the `SCRATCH` slot, so neither source register is modified.
+macro_rules! binop_nc {
+    ($self:ident, $sse:ident, $mem:ident, $dst:expr, $s1: expr, $s2: expr) => {{
+        if $dst == $s2 && $dst != $s1 {
+            $self.save_stack($s2, SCRATCH);
+            $self.fmov($dst, $s1);
+            $self.amd.$mem(ϕ($dst), STACK, (SCRATCH * REG_SIZE) as i32);
+        } else {
+            binop!($self, $sse, $dst, $s1, $s2);
+        }
     }};
 }
 
@@ -56,20 +76,16 @@ impl AmdSSEGenerator {
 
     /*
         shrink is a helper function used to generate
-        SSE codes from 3-address inputs.
-
-        IMPORTANT! this function can overwrite the values of
-        a and/or b. Therefore, cannot assume a and b are intact
-        after calling this function.
+        SSE codes from 3-address inputs: it returns the two
+        operands of the 2-address instruction. For `dst == s2`
+        it swaps the operands, which is only valid for commutative
+        operations (`binop_nc` handles the others). It does not
+        modify `s1` or `s2` unless one of them is `dst`.
     */
-    fn shrink(&mut self, dst: Reg, s1: Reg, s2: Reg, commutative: bool) -> (Reg, Reg) {
+    fn shrink(&mut self, dst: Reg, s1: Reg, s2: Reg) -> (Reg, Reg) {
         if dst == s1 {
             (dst, s2)
         } else if dst == s2 {
-            // difficult case: dst == b, dst != a
-            if !commutative {
-                self.fxchg(s1, s2);
-            };
             (dst, s1)
         } else {
             // dst != a, dst != b, a ?= b
@@ -351,19 +367,19 @@ impl Generator for AmdSSEGenerator {
     }
 
     fn plus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, addsd, dst, s1, s2, true);
+        binop!(self, addsd, dst, s1, s2);
     }
 
     fn minus(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, subsd, dst, s1, s2, false);
+        binop_nc!(self, subsd, subsd_xmm_mem, dst, s1, s2);
     }
 
     fn times(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, mulsd, dst, s1, s2, true);
+        binop!(self, mulsd, dst, s1, s2);
     }
 
     fn divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, divsd, dst, s1, s2, false);
+        binop_nc!(self, divsd, divsd_xmm_mem, dst, s1, s2);
     }
 
     fn times_complex(
@@ -415,43 +431,43 @@ impl Generator for AmdSSEGenerator {
     }
 
     fn gt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, cmpnlesd, dst, s1, s2, false);
+        binop_nc!(self, cmpnlesd, cmpnlesd_xmm_mem, dst, s1, s2);
     }
 
     fn geq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, cmpnltsd, dst, s1, s2, false);
+        binop_nc!(self, cmpnltsd, cmpnltsd_xmm_mem, dst, s1, s2);
     }
 
     fn lt(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, cmpltsd, dst, s1, s2, false);
+        binop_nc!(self, cmpltsd, cmpltsd_xmm_mem, dst, s1, s2);
     }
 
     fn leq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, cmplesd, dst, s1, s2, false);
+        binop_nc!(self, cmplesd, cmplesd_xmm_mem, dst, s1, s2);
     }
 
     fn eq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, cmpeqsd, dst, s1, s2, true);
+        binop!(self, cmpeqsd, dst, s1, s2);
     }
 
     fn neq(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, cmpneqsd, dst, s1, s2, true);
+        binop!(self, cmpneqsd, dst, s1, s2);
     }
 
     fn and(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, andpd, dst, s1, s2, true);
+        binop!(self, andpd, dst, s1, s2);
     }
 
     fn andnot(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, andnpd, dst, s1, s2, false);
+        binop_nc!(self, andnpd, andnpd_xmm_mem, dst, s1, s2);
     }
 
     fn or(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, orpd, dst, s1, s2, true);
+        binop!(self, orpd, dst, s1, s2);
     }
 
     fn xor(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        binop!(self, xorpd, dst, s1, s2, true);
+        binop!(self, xorpd, dst, s1, s2);
     }
 
     fn not(&mut self, dst: Reg, s1: Reg) {
@@ -459,13 +475,20 @@ impl Generator for AmdSSEGenerator {
         self.amd.movapd(ϕ(dst), ϕ(s1));
     }
 
+    // The fused operations are emulated by a product and a sum (two roundings). No source
+    // register is modified: when `dst == s3`, `s3` is saved in the `SCRATCH` stack slot
+    // and added from memory. `s3 - p` is written `-p + s3` (the same bits), which needs no
+    // scratch slot when `dst != s3`.
+
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
         if dst != s3 {
             self.times(dst, s1, s2);
             self.plus(dst, dst, s3);
         } else {
-            self.times(s1, s1, s2);
-            self.plus(dst, s1, s3);
+            self.save_stack(s3, SCRATCH);
+            self.times(dst, s1, s2);
+            self.amd
+                .addsd_xmm_mem(ϕ(dst), STACK, (SCRATCH * REG_SIZE) as i32);
         }
     }
 
@@ -474,31 +497,30 @@ impl Generator for AmdSSEGenerator {
             self.times(dst, s1, s2);
             self.minus(dst, dst, s3);
         } else {
-            self.times(s1, s1, s2);
-            self.minus(dst, s1, s3);
+            self.save_stack(s3, SCRATCH);
+            self.times(dst, s1, s2);
+            self.amd
+                .subsd_xmm_mem(ϕ(dst), STACK, (SCRATCH * REG_SIZE) as i32);
         }
     }
 
     fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
         if dst != s3 {
             self.times(dst, s1, s2);
-            self.minus(dst, s3, dst);
+            self.neg(dst, dst);
+            self.plus(dst, dst, s3);
         } else {
-            self.times(s1, s1, s2);
-            self.minus(dst, s3, s1);
+            self.save_stack(s3, SCRATCH);
+            self.times(dst, s1, s2);
+            self.neg(dst, dst);
+            self.amd
+                .addsd_xmm_mem(ϕ(dst), STACK, (SCRATCH * REG_SIZE) as i32);
         }
     }
 
     fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        if dst != s3 {
-            self.times(dst, s1, s2);
-            self.plus(dst, dst, s3);
-            self.neg(dst, dst);
-        } else {
-            self.times(s1, s1, s2);
-            self.plus(dst, s1, s3);
-            self.neg(dst, dst);
-        }
+        self.fused_mul_add(dst, s1, s2, s3);
+        self.neg(dst, dst);
     }
 
     fn add_consts(&mut self, consts: &[f64]) {

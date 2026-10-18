@@ -1094,10 +1094,22 @@ impl Amd {
         self.modrm_reg(reg, rm);
     }
 
+    pub fn addsd_xmm_mem(&mut self, reg: u8, rm: u8, offset: i32) {
+        self.sse_sd(reg, rm);
+        self.append_byte(0x58);
+        self.modrm_mem(reg, rm, offset);
+    }
+
     pub fn subsd(&mut self, reg: u8, rm: u8) {
         self.sse_sd(reg, rm);
         self.append_byte(0x5c);
         self.modrm_reg(reg, rm);
+    }
+
+    pub fn subsd_xmm_mem(&mut self, reg: u8, rm: u8, offset: i32) {
+        self.sse_sd(reg, rm);
+        self.append_byte(0x5c);
+        self.modrm_mem(reg, rm, offset);
     }
 
     pub fn mulsd(&mut self, reg: u8, rm: u8) {
@@ -1116,6 +1128,12 @@ impl Amd {
         self.sse_sd(reg, rm);
         self.append_byte(0x5e);
         self.modrm_reg(reg, rm);
+    }
+
+    pub fn divsd_xmm_mem(&mut self, reg: u8, rm: u8, offset: i32) {
+        self.sse_sd(reg, rm);
+        self.append_byte(0x5e);
+        self.modrm_mem(reg, rm, offset);
     }
 
     pub fn sqrtsd(&mut self, reg: u8, rm: u8) {
@@ -1150,10 +1168,24 @@ impl Amd {
         self.append_byte(1);
     }
 
+    pub fn cmpltsd_xmm_mem(&mut self, reg: u8, rm: u8, offset: i32) {
+        self.sse_sd(reg, rm);
+        self.append_byte(0xc2);
+        self.modrm_mem(reg, rm, offset);
+        self.append_byte(1);
+    }
+
     pub fn cmplesd(&mut self, reg: u8, rm: u8) {
         self.sse_sd(reg, rm);
         self.append_byte(0xc2);
         self.modrm_reg(reg, rm);
+        self.append_byte(2);
+    }
+
+    pub fn cmplesd_xmm_mem(&mut self, reg: u8, rm: u8, offset: i32) {
+        self.sse_sd(reg, rm);
+        self.append_byte(0xc2);
+        self.modrm_mem(reg, rm, offset);
         self.append_byte(2);
     }
 
@@ -1178,10 +1210,24 @@ impl Amd {
         self.append_byte(5);
     }
 
+    pub fn cmpnltsd_xmm_mem(&mut self, reg: u8, rm: u8, offset: i32) {
+        self.sse_sd(reg, rm);
+        self.append_byte(0xc2);
+        self.modrm_mem(reg, rm, offset);
+        self.append_byte(5);
+    }
+
     pub fn cmpnlesd(&mut self, reg: u8, rm: u8) {
         self.sse_sd(reg, rm);
         self.append_byte(0xc2);
         self.modrm_reg(reg, rm);
+        self.append_byte(6);
+    }
+
+    pub fn cmpnlesd_xmm_mem(&mut self, reg: u8, rm: u8, offset: i32) {
+        self.sse_sd(reg, rm);
+        self.append_byte(0xc2);
+        self.modrm_mem(reg, rm, offset);
         self.append_byte(6);
     }
 
@@ -1214,6 +1260,13 @@ impl Amd {
         self.sse_pd(reg, rm);
         self.append_byte(0x55);
         self.modrm_reg(reg, rm);
+    }
+
+    /// The memory operand must be 16-byte aligned (legacy SSE).
+    pub fn andnpd_xmm_mem(&mut self, reg: u8, rm: u8, offset: i32) {
+        self.sse_pd(reg, rm);
+        self.append_byte(0x55);
+        self.modrm_mem(reg, rm, offset);
     }
 
     pub fn andnpd_label(&mut self, reg: u8, label: &str) {

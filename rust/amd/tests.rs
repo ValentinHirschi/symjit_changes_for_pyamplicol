@@ -10753,3 +10753,291 @@ fn f32_vmovpd_load() {
         a.vmovpd_ymm_mem(1, 3, 8);
     });
 }
+
+#[test]
+fn addsd_xmm_mem_rbx_0() {
+    // addsd xmm1, qword ptr [rbx+0x0]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction) and always a displacement; the canonical form has neither (`[rbx]`)
+    check(DataType::F64, &[0xf2, 0x48, 0x0f, 0x58, 0x4b, 0x00], |a| {
+        a.addsd_xmm_mem(1, 3, 0);
+    });
+}
+
+#[test]
+fn addsd_xmm_mem_rbx_8() {
+    // addsd xmm9, qword ptr [rbx+0x8]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0xf2, 0x4c, 0x0f, 0x58, 0x4b, 0x08], |a| {
+        a.addsd_xmm_mem(9, 3, 8);
+    });
+}
+
+#[test]
+fn addsd_xmm_mem_rsp_1234() {
+    // addsd xmm2, qword ptr [rsp+0x1234]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0xf2, 0x48, 0x0f, 0x58, 0x94, 0x24, 0x34, 0x12, 0x00, 0x00], |a| {
+        a.addsd_xmm_mem(2, 4, 4660);
+    });
+}
+
+#[test]
+fn addsd_xmm_mem_r13_0() {
+    // addsd xmm3, qword ptr [r13+0x0]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0xf2, 0x49, 0x0f, 0x58, 0x5d, 0x00], |a| {
+        a.addsd_xmm_mem(3, 13, 0);
+    });
+}
+
+#[test]
+fn subsd_xmm_mem_rbx_0() {
+    // subsd xmm1, qword ptr [rbx+0x0]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction) and always a displacement; the canonical form has neither (`[rbx]`)
+    check(DataType::F64, &[0xf2, 0x48, 0x0f, 0x5c, 0x4b, 0x00], |a| {
+        a.subsd_xmm_mem(1, 3, 0);
+    });
+}
+
+#[test]
+fn subsd_xmm_mem_rbx_8() {
+    // subsd xmm9, qword ptr [rbx+0x8]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0xf2, 0x4c, 0x0f, 0x5c, 0x4b, 0x08], |a| {
+        a.subsd_xmm_mem(9, 3, 8);
+    });
+}
+
+#[test]
+fn subsd_xmm_mem_rsp_1234() {
+    // subsd xmm2, qword ptr [rsp+0x1234]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0xf2, 0x48, 0x0f, 0x5c, 0x94, 0x24, 0x34, 0x12, 0x00, 0x00], |a| {
+        a.subsd_xmm_mem(2, 4, 4660);
+    });
+}
+
+#[test]
+fn subsd_xmm_mem_r13_0() {
+    // subsd xmm3, qword ptr [r13+0x0]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0xf2, 0x49, 0x0f, 0x5c, 0x5d, 0x00], |a| {
+        a.subsd_xmm_mem(3, 13, 0);
+    });
+}
+
+#[test]
+fn divsd_xmm_mem_rbx_0() {
+    // divsd xmm1, qword ptr [rbx+0x0]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction) and always a displacement; the canonical form has neither (`[rbx]`)
+    check(DataType::F64, &[0xf2, 0x48, 0x0f, 0x5e, 0x4b, 0x00], |a| {
+        a.divsd_xmm_mem(1, 3, 0);
+    });
+}
+
+#[test]
+fn divsd_xmm_mem_rbx_8() {
+    // divsd xmm9, qword ptr [rbx+0x8]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0xf2, 0x4c, 0x0f, 0x5e, 0x4b, 0x08], |a| {
+        a.divsd_xmm_mem(9, 3, 8);
+    });
+}
+
+#[test]
+fn divsd_xmm_mem_rsp_1234() {
+    // divsd xmm2, qword ptr [rsp+0x1234]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0xf2, 0x48, 0x0f, 0x5e, 0x94, 0x24, 0x34, 0x12, 0x00, 0x00], |a| {
+        a.divsd_xmm_mem(2, 4, 4660);
+    });
+}
+
+#[test]
+fn divsd_xmm_mem_r13_0() {
+    // divsd xmm3, qword ptr [r13+0x0]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0xf2, 0x49, 0x0f, 0x5e, 0x5d, 0x00], |a| {
+        a.divsd_xmm_mem(3, 13, 0);
+    });
+}
+
+#[test]
+fn cmpltsd_xmm_mem_rbx_0() {
+    // cmpltsd xmm1, qword ptr [rbx+0x0]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction) and always a displacement; the canonical form has neither (`[rbx]`)
+    check(DataType::F64, &[0xf2, 0x48, 0x0f, 0xc2, 0x4b, 0x00, 0x01], |a| {
+        a.cmpltsd_xmm_mem(1, 3, 0);
+    });
+}
+
+#[test]
+fn cmpltsd_xmm_mem_rbx_8() {
+    // cmpltsd xmm9, qword ptr [rbx+0x8]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0xf2, 0x4c, 0x0f, 0xc2, 0x4b, 0x08, 0x01], |a| {
+        a.cmpltsd_xmm_mem(9, 3, 8);
+    });
+}
+
+#[test]
+fn cmpltsd_xmm_mem_rsp_1234() {
+    // cmpltsd xmm2, qword ptr [rsp+0x1234]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0xf2, 0x48, 0x0f, 0xc2, 0x94, 0x24, 0x34, 0x12, 0x00, 0x00, 0x01], |a| {
+        a.cmpltsd_xmm_mem(2, 4, 4660);
+    });
+}
+
+#[test]
+fn cmpltsd_xmm_mem_r13_0() {
+    // cmpltsd xmm3, qword ptr [r13+0x0]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0xf2, 0x49, 0x0f, 0xc2, 0x5d, 0x00, 0x01], |a| {
+        a.cmpltsd_xmm_mem(3, 13, 0);
+    });
+}
+
+#[test]
+fn cmplesd_xmm_mem_rbx_0() {
+    // cmplesd xmm1, qword ptr [rbx+0x0]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction) and always a displacement; the canonical form has neither (`[rbx]`)
+    check(DataType::F64, &[0xf2, 0x48, 0x0f, 0xc2, 0x4b, 0x00, 0x02], |a| {
+        a.cmplesd_xmm_mem(1, 3, 0);
+    });
+}
+
+#[test]
+fn cmplesd_xmm_mem_rbx_8() {
+    // cmplesd xmm9, qword ptr [rbx+0x8]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0xf2, 0x4c, 0x0f, 0xc2, 0x4b, 0x08, 0x02], |a| {
+        a.cmplesd_xmm_mem(9, 3, 8);
+    });
+}
+
+#[test]
+fn cmplesd_xmm_mem_rsp_1234() {
+    // cmplesd xmm2, qword ptr [rsp+0x1234]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0xf2, 0x48, 0x0f, 0xc2, 0x94, 0x24, 0x34, 0x12, 0x00, 0x00, 0x02], |a| {
+        a.cmplesd_xmm_mem(2, 4, 4660);
+    });
+}
+
+#[test]
+fn cmplesd_xmm_mem_r13_0() {
+    // cmplesd xmm3, qword ptr [r13+0x0]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0xf2, 0x49, 0x0f, 0xc2, 0x5d, 0x00, 0x02], |a| {
+        a.cmplesd_xmm_mem(3, 13, 0);
+    });
+}
+
+#[test]
+fn cmpnltsd_xmm_mem_rbx_0() {
+    // cmpnltsd xmm1, qword ptr [rbx+0x0]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction) and always a displacement; the canonical form has neither (`[rbx]`)
+    check(DataType::F64, &[0xf2, 0x48, 0x0f, 0xc2, 0x4b, 0x00, 0x05], |a| {
+        a.cmpnltsd_xmm_mem(1, 3, 0);
+    });
+}
+
+#[test]
+fn cmpnltsd_xmm_mem_rbx_8() {
+    // cmpnltsd xmm9, qword ptr [rbx+0x8]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0xf2, 0x4c, 0x0f, 0xc2, 0x4b, 0x08, 0x05], |a| {
+        a.cmpnltsd_xmm_mem(9, 3, 8);
+    });
+}
+
+#[test]
+fn cmpnltsd_xmm_mem_rsp_1234() {
+    // cmpnltsd xmm2, qword ptr [rsp+0x1234]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0xf2, 0x48, 0x0f, 0xc2, 0x94, 0x24, 0x34, 0x12, 0x00, 0x00, 0x05], |a| {
+        a.cmpnltsd_xmm_mem(2, 4, 4660);
+    });
+}
+
+#[test]
+fn cmpnltsd_xmm_mem_r13_0() {
+    // cmpnltsd xmm3, qword ptr [r13+0x0]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0xf2, 0x49, 0x0f, 0xc2, 0x5d, 0x00, 0x05], |a| {
+        a.cmpnltsd_xmm_mem(3, 13, 0);
+    });
+}
+
+#[test]
+fn cmpnlesd_xmm_mem_rbx_0() {
+    // cmpnlesd xmm1, qword ptr [rbx+0x0]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction) and always a displacement; the canonical form has neither (`[rbx]`)
+    check(DataType::F64, &[0xf2, 0x48, 0x0f, 0xc2, 0x4b, 0x00, 0x06], |a| {
+        a.cmpnlesd_xmm_mem(1, 3, 0);
+    });
+}
+
+#[test]
+fn cmpnlesd_xmm_mem_rbx_8() {
+    // cmpnlesd xmm9, qword ptr [rbx+0x8]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0xf2, 0x4c, 0x0f, 0xc2, 0x4b, 0x08, 0x06], |a| {
+        a.cmpnlesd_xmm_mem(9, 3, 8);
+    });
+}
+
+#[test]
+fn cmpnlesd_xmm_mem_rsp_1234() {
+    // cmpnlesd xmm2, qword ptr [rsp+0x1234]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0xf2, 0x48, 0x0f, 0xc2, 0x94, 0x24, 0x34, 0x12, 0x00, 0x00, 0x06], |a| {
+        a.cmpnlesd_xmm_mem(2, 4, 4660);
+    });
+}
+
+#[test]
+fn cmpnlesd_xmm_mem_r13_0() {
+    // cmpnlesd xmm3, qword ptr [r13+0x0]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0xf2, 0x49, 0x0f, 0xc2, 0x5d, 0x00, 0x06], |a| {
+        a.cmpnlesd_xmm_mem(3, 13, 0);
+    });
+}
+
+#[test]
+fn andnpd_xmm_mem_rbx_0() {
+    // andnpd xmm1, xmmword ptr [rbx+0x0]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction) and always a displacement; the canonical form has neither (`[rbx]`)
+    check(DataType::F64, &[0x66, 0x48, 0x0f, 0x55, 0x4b, 0x00], |a| {
+        a.andnpd_xmm_mem(1, 3, 0);
+    });
+}
+
+#[test]
+fn andnpd_xmm_mem_rbx_8() {
+    // andnpd xmm9, xmmword ptr [rbx+0x8]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0x66, 0x4c, 0x0f, 0x55, 0x4b, 0x08], |a| {
+        a.andnpd_xmm_mem(9, 3, 8);
+    });
+}
+
+#[test]
+fn andnpd_xmm_mem_rsp_1234() {
+    // andnpd xmm2, xmmword ptr [rsp+0x1234]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0x66, 0x48, 0x0f, 0x55, 0x94, 0x24, 0x34, 0x12, 0x00, 0x00], |a| {
+        a.andnpd_xmm_mem(2, 4, 4660);
+    });
+}
+
+#[test]
+fn andnpd_xmm_mem_r13_0() {
+    // andnpd xmm3, xmmword ptr [r13+0x0]
+    // NOTE: the assembler emits a redundant REX.W (no effect on this SSE instruction); the canonical form has no REX
+    check(DataType::F64, &[0x66, 0x49, 0x0f, 0x55, 0x5d, 0x00], |a| {
+        a.andnpd_xmm_mem(3, 13, 0);
+    });
+}
