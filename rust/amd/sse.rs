@@ -460,24 +460,45 @@ impl Generator for AmdSSEGenerator {
     }
 
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.times(s1, s1, s2);
-        self.plus(dst, s1, s3);
+        if dst != s3 {
+            self.times(dst, s1, s2);
+            self.plus(dst, dst, s3);
+        } else {
+            self.times(s1, s1, s2);
+            self.plus(dst, s1, s3);
+        }
     }
 
     fn fused_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.times(s1, s1, s2);
-        self.minus(dst, s1, s3);
+        if dst != s3 {
+            self.times(dst, s1, s2);
+            self.minus(dst, dst, s3);
+        } else {
+            self.times(s1, s1, s2);
+            self.minus(dst, s1, s3);
+        }
     }
 
     fn fused_neg_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.times(s1, s1, s2);
-        self.minus(dst, s3, s1);
+        if dst != s3 {
+            self.times(dst, s1, s2);
+            self.minus(dst, s3, dst);
+        } else {
+            self.times(s1, s1, s2);
+            self.minus(dst, s3, s1);
+        }
     }
 
     fn fused_neg_mul_sub(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {
-        self.times(s1, s1, s2);
-        self.plus(dst, s1, s3);
-        self.neg(dst, dst);
+        if dst != s3 {
+            self.times(dst, s1, s2);
+            self.plus(dst, dst, s3);
+            self.neg(dst, dst);
+        } else {
+            self.times(s1, s1, s2);
+            self.plus(dst, s1, s3);
+            self.neg(dst, dst);
+        }
     }
 
     fn add_consts(&mut self, consts: &[f64]) {

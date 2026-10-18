@@ -1022,6 +1022,7 @@ impl Default for Config {
                     | FAST_COMPLEX
                     // | DIRECT
                     | PARALLEL_MUL
+                    // | STABLE_MATH
                     | (2 << OPT_LEVEL_SHIFT)
                     | DIRECT_ARENA_IDENTITY_OUTPUT,
             )
@@ -1157,7 +1158,7 @@ impl Storage for Config {
         let val: usize = (self.opt as usize) | (ty << 32);
         stream.write_all(&val.to_le_bytes())?;
 
-        let val: usize = self.stack_limit() as usize;
+        let val: usize = self.stack_limit();
         stream.write_all(&val.to_le_bytes())?;
 
         let val: usize = self.num_args() as usize;

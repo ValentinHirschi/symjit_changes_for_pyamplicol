@@ -159,6 +159,7 @@ impl VirtualTable {
     /// The C math library (libm) function computing `op`, for object files; None if
     /// there is none (e.g. `csc`, `sinc`, complex functions). Note that symjit's `log`
     /// is the decimal logarithm and `ln` the natural one.
+    #[cfg(all(target_family = "unix", feature = "libm"))]
     pub fn c_name(op: &str) -> Option<&'static str> {
         let name = match op {
             "sin" => "sin",
