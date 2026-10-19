@@ -60,6 +60,20 @@ pub use serializer::MirWriter;
 pub use types::{ElemType, Element};
 pub use utils::{Compiled, CompiledPlaneFunc, PlaneDescriptor, Storage};
 
+/// Internals for code generators outside the crate (symjit-utils): the MIR of a saved
+/// application (`Application::read_sjb`) and the `Generator` trait it is replayed into
+/// (`Builder::compile_from_mir`), with the types of the trait's methods.
+pub mod backend {
+    pub use crate::builder::Builder;
+    pub use crate::code::Func;
+    pub use crate::complexify::Complexifier;
+    pub use crate::config::ABI_AREA;
+    pub use crate::generator::{Generator, GeneratorType, StackRegions};
+    pub use crate::mir::{Instruction as MirInstruction, Mir};
+    pub use crate::symbol::Loc;
+    pub use crate::utils::{align_stack, Reg};
+}
+
 pub fn var(name: &str) -> Expr {
     Expr::var(name)
 }

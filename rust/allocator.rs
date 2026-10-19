@@ -403,7 +403,7 @@ impl GreedyAllocator {
                     self.push(Instruction::Uni { op, dst, s1 })
                 }
                 Instruction::Bi { op, dst, s1, s2 } => {
-                    if self.config.is_sse() || self.config.is_arm64() {
+                    if self.config.is_arm64() {
                         let (dst, _) = self.allocate(ip, dst);
                         let s1 = self.deallocate(s1);
                         let s2 = self.deallocate(s2);
@@ -531,27 +531,15 @@ impl GreedyAllocator {
                     false_val,
                     cond,
                 } => {
-                    if self.config.is_sse() {
-                        let (dst, _) = self.allocate(ip, dst);
-                        let true_val = self.deallocate(true_val);
-                        let false_val = self.deallocate(false_val);
-                        self.push(Instruction::IfElse {
-                            dst,
-                            true_val,
-                            false_val,
-                            cond,
-                        })
-                    } else {
-                        let true_val = self.deallocate(true_val);
-                        let false_val = self.deallocate(false_val);
-                        let (dst, _) = self.allocate(ip, dst);
-                        self.push(Instruction::IfElse {
-                            dst,
-                            true_val,
-                            false_val,
-                            cond,
-                        })
-                    }
+                    let true_val = self.deallocate(true_val);
+                    let false_val = self.deallocate(false_val);
+                    let (dst, _) = self.allocate(ip, dst);
+                    self.push(Instruction::IfElse {
+                        dst,
+                        true_val,
+                        false_val,
+                        cond,
+                    });
                     self.locs.insert(cond);
                 }
                 Instruction::Branch { label } => {
@@ -595,39 +583,21 @@ impl GreedyAllocator {
                     x2,
                     y2,
                 } => {
-                    if self.config.is_sse() {
-                        let (xd, _) = self.allocate(ip, xd);
-                        let (yd, _) = self.allocate(ip, yd);
-                        let x1 = self.deallocate(x1);
-                        let y1 = self.deallocate(y1);
-                        let x2 = self.deallocate(x2);
-                        let y2 = self.deallocate(y2);
-                        self.push(Instruction::ComplexBi {
-                            op,
-                            xd,
-                            yd,
-                            x1,
-                            y1,
-                            x2,
-                            y2,
-                        })
-                    } else {
-                        let x1 = self.deallocate(x1);
-                        let y1 = self.deallocate(y1);
-                        let x2 = self.deallocate(x2);
-                        let y2 = self.deallocate(y2);
-                        let (xd, _) = self.allocate(ip, xd);
-                        let (yd, _) = self.allocate(ip, yd);
-                        self.push(Instruction::ComplexBi {
-                            op,
-                            xd,
-                            yd,
-                            x1,
-                            y1,
-                            x2,
-                            y2,
-                        })
-                    }
+                    let x1 = self.deallocate(x1);
+                    let y1 = self.deallocate(y1);
+                    let x2 = self.deallocate(x2);
+                    let y2 = self.deallocate(y2);
+                    let (xd, _) = self.allocate(ip, xd);
+                    let (yd, _) = self.allocate(ip, yd);
+                    self.push(Instruction::ComplexBi {
+                        op,
+                        xd,
+                        yd,
+                        x1,
+                        y1,
+                        x2,
+                        y2,
+                    })
                 }
             }
         }

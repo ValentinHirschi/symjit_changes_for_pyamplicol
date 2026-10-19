@@ -382,28 +382,36 @@ impl Generator for AmdSSEGenerator {
         binop_nc!(self, divsd, divsd_xmm_mem, dst, s1, s2);
     }
 
-    fn times_complex(
-        &mut self,
-        _xd: Reg,
-        _yd: Reg,
-        _x1: Reg,
-        _y1: Reg,
-        _x2: Reg,
-        _y2: Reg,
-    ) -> bool {
-        false
+    // The formulas of `AmdScalarGenerator` (the fused operations are emulated, see below).
+
+    fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
+        let xt = Reg::Gen(2);
+        let yt = Reg::Gen(3);
+
+        self.times(xt, y1, y2);
+        self.fused_mul_sub(xt, x1, x2, xt);
+        self.times(yt, x1, y2);
+        self.fused_mul_add(yd, x2, y1, yt);
+        self.fmov(xd, xt);
+
+        true
     }
 
-    fn divide_complex(
-        &mut self,
-        _xd: Reg,
-        _yd: Reg,
-        _x1: Reg,
-        _y1: Reg,
-        _x2: Reg,
-        _y2: Reg,
-    ) -> bool {
-        false
+    fn divide_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
+        let xt = Reg::Gen(2);
+        let yt = Reg::Gen(3);
+        let t = Reg::Temp;
+
+        self.times(xt, y1, y2);
+        self.fused_mul_add(xt, x1, x2, xt);
+        self.times(yt, x1, y2);
+        self.fused_mul_sub(yt, x2, y1, yt);
+        self.times(t, x2, x2);
+        self.fused_mul_add(t, y2, y2, t);
+        self.divide(xd, xt, t);
+        self.divide(yd, yt, t);
+
+        true
     }
 
     fn support_times2(&self) -> bool {
@@ -471,8 +479,8 @@ impl Generator for AmdSSEGenerator {
     }
 
     fn not(&mut self, dst: Reg, s1: Reg) {
-        self.amd.xorpd_label(ϕ(s1), "_all_ones_");
-        self.amd.movapd(ϕ(dst), ϕ(s1));
+        self.fmov(dst, s1);
+        self.amd.xorpd_label(ϕ(dst), "_all_ones_");
     }
 
     // The fused operations are emulated by a product and a sum (two roundings). No source

@@ -179,20 +179,11 @@ impl Complexifier {
         }
     }
 
-    /// `stable_divide` for SSE and for a `dst` that is not a `Gen` pair (e.g. `Ret`, a call
-    /// argument, whose real part is also `Ret`).
+    /// `stable_divide` for a `dst` that is not a `Gen` pair (e.g. `Ret`, a call argument,
+    /// whose real part is also `Ret`).
     fn stable_divide_general(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         let (a, c, d) = (re(s1), re(s2), im(s2));
         let (t0, t1) = (Self::T0, Self::T1);
-
-        if self.mir.config.is_sse() {
-            let b = if self.is_real_reg(s1) {
-                None
-            } else {
-                Some(im(s1))
-            };
-            return self.stable_divide_sse(dst, Some(a), b, c, d);
-        }
 
         self.stable_divisor_scale(c, d); // T0 = k
         self.mir.times(t1, c, t0); // c'
@@ -210,24 +201,6 @@ impl Complexifier {
             self.mir.divide(x, x, y);
             self.mir.divide(t1, t1, y);
             self.stable_store(dst, t1, x);
-        } else if matches!(dst, Reg::Gen(_)) {
-            // the scaled operands go to `divide_complex` (`ComplexBi`), so every generator
-            // uses its own formula, as the default code does. Its scratch registers are
-            // Gen(2), Gen(3) (T0, T1) and `Temp`, and it writes `dst` after reading the
-            // operands, so the operands can be in `re(dst)`/`im(dst)` (a `Gen` pair, not one
-            // of the scratch registers).
-            let b = im(s1);
-            let pool = [Reg::Gen(0), Reg::Gen(1), Reg::Ret, re(dst), im(dst)];
-            let pick = |busy: &[Reg]| *pool.iter().find(|r| !busy.contains(r)).unwrap();
-            let x = pick(&[a, b]);
-            self.mir.times(x, d, t0); // d'
-            let y = pick(&[b, x]);
-            self.mir.times(y, a, t0); // a'
-            let z = pick(&[x, y]);
-            self.mir.times(z, b, t0); // b'
-            let w = pick(&[x, y, z]);
-            self.mir.fmov(w, t1); // c'
-            self.mir.divide_complex(re(dst), im(dst), y, z, w, x);
         } else {
             let b = im(s1);
             let x = Self::stable_scratch(&[a, b]);
@@ -248,46 +221,16 @@ impl Complexifier {
         }
     }
 
-    /// SSE: `dst := (a + bi) / (c + di)` (`a`, `b` = None are 1 and 0) on the operands scaled
-    /// by `stable_divisor_scale`, through `divide_complex`: its SSE fallback
-    /// (`generic_complex_divide`) has no fused operations, which SSE emulates by overwriting
-    /// their first operand. Its scratch registers are Gen(0), Gen(2), Gen(3) and `Temp`.
-    /// `dst` is a `Gen` pair (see `stable_applies`).
-    fn stable_divide_sse(&mut self, dst: Reg, a: Option<Reg>, b: Option<Reg>, c: Reg, d: Reg) {
-        let (t0, t1) = (Self::T0, Self::T1);
-        let pool = [Reg::Gen(1), Reg::Ret, re(dst), im(dst)];
-        let pick = |busy: &[Reg]| *pool.iter().find(|r| !busy.contains(r)).unwrap();
-        let inputs: Vec<Reg> = [a, b].into_iter().flatten().collect();
-
-        self.stable_divisor_scale(c, d); // T0 = k
-        self.mir.times(t1, c, t0); // c'
-        let x = pick(&inputs);
-        self.mir.times(x, d, t0); // d'
-        let y = pick(&[b.unwrap_or(x), x]);
-        match a {
-            Some(a) => self.mir.times(y, a, t0), // a'
-            None => self.mir.fmov(y, t0),        // 1 * k
-        }
-        let z = pick(&[x, y]);
-        match b {
-            Some(b) => self.mir.times(z, b, t0), // b'
-            None => self.mir.xor(z, z, z),
-        }
-        let w = pick(&[x, y, z]);
-        self.mir.fmov(w, t1); // c'
-        self.mir.divide_complex(re(dst), im(dst), y, z, w, x);
-    }
-
     /// `dst := s1 / s2` for a complex `s2`, with both operands scaled by `stable_divisor_scale`
     /// (exact, so in the normal range the result has the bits of the default code). `s1` may
-    /// be real. The fallback formula (SSE, or `dst` not a `Gen` register) is that of
-    /// `divide_complex` of the AVX and RISC-V generators.
+    /// be real. The fallback formula (`dst` not a `Gen` register) is that of
+    /// `divide_complex` of the scalar generators.
     fn stable_divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         let (a, b, c, d) = (re(s1), im(s1), re(s2), im(s2));
         let (t0, t1) = (Self::T0, Self::T1);
         let (a_, b_, c_, d_) = (Reg::Gen(0), Reg::Gen(1), Reg::Ret, re(dst));
 
-        if self.mir.config.is_sse() || !matches!(dst, Reg::Gen(_)) {
+        if !matches!(dst, Reg::Gen(_)) {
             return self.stable_divide_general(dst, s1, s2);
         }
 
@@ -320,29 +263,18 @@ impl Complexifier {
         self.set_reg_complex(dst);
     }
 
-    /// Whether the stable division code applies: on SSE it needs a `Gen` destination
-    /// (otherwise the default code is used).
-    fn stable_applies(&self, dst: Reg) -> bool {
-        self.mir.config.stable_math() && (!self.mir.config.is_sse() || matches!(dst, Reg::Gen(_)))
-    }
-
     /// `dst := 1 / s1` for a complex `s1`: `conj(s1') / |s1'|^2 * k` with `s1' = s1 * k`.
     fn stable_recip(&mut self, dst: Reg, s1: Reg) {
         let (c, d) = (re(s1), im(s1));
         let (t0, t1) = (Self::T0, Self::T1);
-        let (c_, d_, t) = (Reg::Gen(0), Reg::Gen(1), Reg::Ret);
+        let (c_, d_) = (Reg::Gen(0), Reg::Gen(1));
 
         self.stable_divisor_scale(c, d); // T0 = k
         self.mir.times(c_, c, t0); // c'
         self.mir.times(d_, d, t0); // d'
         self.mir.times(t1, c_, c_);
 
-        if self.mir.config.is_sse() {
-            self.mir.fmov(t, d_);
-            self.mir.fused_mul_add(t1, t, t, t1); // c'^2 + d'^2
-        } else {
-            self.mir.fused_mul_add(t1, d_, d_, t1); // c'^2 + d'^2
-        }
+        self.mir.fused_mul_add(t1, d_, d_, t1); // c'^2 + d'^2
 
         self.mir.divide(c_, c_, t1);
         self.mir.divide(d_, d_, t1);
@@ -676,7 +608,7 @@ impl Generator for Complexifier {
             let y = Self::T1;
 
             self.mir.xor(x, x, x);
-            self.mir.lt(x, x, re(s1)); // lt intead of ge for SSE to work correctly
+            self.mir.lt(x, x, re(s1));
             self.mir.save_stack(x, 2);
 
             if self.mir.config.stable_math() {
@@ -725,16 +657,8 @@ impl Generator for Complexifier {
         if self.is_real_reg(s1) {
             self.mir.recip(re(dst), re(s1));
             self.set_reg_real(dst);
-        } else if self.stable_applies(dst) {
+        } else if self.mir.config.stable_math() {
             self.stable_recip(dst, s1);
-            self.set_reg_complex(dst);
-        } else if self.mir.config.is_sse() {
-            self.mir.times(Self::T0, im(s1), im(s1));
-            self.mir.times(Self::T1, re(s1), re(s1));
-            self.mir.plus(Self::T0, Self::T0, Self::T1);
-            self.mir.divide(re(dst), re(s1), Self::T0);
-            self.mir.divide(im(dst), im(s1), Self::T0);
-            self.mir.neg(im(dst), im(dst));
             self.set_reg_complex(dst);
         } else {
             self.mir.times(Self::T0, re(s1), re(s1));
@@ -890,32 +814,19 @@ impl Generator for Complexifier {
                 self.mir.divide(im(dst), im(s1), re(s2));
                 self.mir.divide(re(dst), re(s1), re(s2));
             }
-            Types::RC | Types::CC if self.stable_applies(dst) => {
+            Types::RC | Types::CC if self.mir.config.stable_math() => {
                 self.stable_divide(dst, s1, s2);
             }
             Types::RC => {
-                if self.mir.config.is_sse() {
-                    self.mir.times(Self::T0, re(s2), re(s2));
-                    self.mir.times(Self::T1, im(s2), im(s2));
-                    self.mir.plus(t, Self::T0, Self::T1);
+                self.mir.times(Self::T0, re(s2), re(s2));
+                self.mir.fused_mul_add(t, im(s2), im(s2), Self::T0);
 
-                    self.mir.times(Self::T0, re(s1), re(s2));
-                    self.mir.times(Self::T1, re(s1), im(s2));
-                    self.mir.neg(im(dst), Self::T1);
+                self.mir.times(Self::T0, re(s1), re(s2));
+                self.mir.times(Self::T1, re(s1), im(s2));
+                self.mir.neg(im(dst), Self::T1);
 
-                    self.mir.divide(im(dst), im(dst), t);
-                    self.mir.divide(re(dst), Self::T0, t);
-                } else {
-                    self.mir.times(Self::T0, re(s2), re(s2));
-                    self.mir.fused_mul_add(t, im(s2), im(s2), Self::T0);
-
-                    self.mir.times(Self::T0, re(s1), re(s2));
-                    self.mir.times(Self::T1, re(s1), im(s2));
-                    self.mir.neg(im(dst), Self::T1);
-
-                    self.mir.divide(im(dst), im(dst), t);
-                    self.mir.divide(re(dst), Self::T0, t);
-                }
+                self.mir.divide(im(dst), im(dst), t);
+                self.mir.divide(re(dst), Self::T0, t);
             }
             Types::CC => {
                 /*
@@ -1096,14 +1007,13 @@ impl Generator for Complexifier {
         self.promote_real(dst, s1, s2);
     }
 
+    // `not` negates a mask, which is real (comparisons give real masks): the imaginary part of
+    // a mask kept in a complex register or stack slot is zero and stays zero. Negating it too
+    // made every negated mask non-zero for `iszero` (the test of `if` and `while` in complex
+    // kernels).
     fn not(&mut self, dst: Reg, s1: Reg) {
         self.mir.not(re(dst), re(s1));
-
-        if !self.is_real_reg(s1) {
-            self.mir.not(im(dst), im(s1));
-        }
-
-        self.copy_real(dst, s1);
+        self.set_reg_real(dst);
     }
 
     fn fused_mul_add(&mut self, dst: Reg, s1: Reg, s2: Reg, s3: Reg) {

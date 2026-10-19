@@ -769,6 +769,50 @@ impl Application {
     pub fn load(stream: &mut impl Read, config: &Config) -> Result<Self> {
         Self::load_with_version(stream, config, 0)
     }
+
+    /// Reads a saved application (`.sjb`) without compiling it: the program, the saved MIR
+    /// (before `Complexifier` for complex models) and the real locations of a complex model.
+    /// For code generators outside the crate (see `backend`).
+    pub fn read_sjb(
+        stream: &mut impl Read,
+        config: &Config,
+    ) -> Result<(Program, HashSet<Loc>, Mir)> {
+        let (prog, reals, mir, _mask) = Self::read_parts(stream, config)?;
+        Ok((prog, reals, mir))
+    }
+
+    // the parts of a saved application and the mask of its prepared kernels
+    fn read_parts(
+        stream: &mut impl Read,
+        config: &Config,
+    ) -> Result<(Program, HashSet<Loc>, Mir, usize)> {
+        let mut bytes: [u8; 8] = [0; 8];
+
+        stream.read_exact(&mut bytes)?;
+
+        if usize::from_le_bytes(bytes) != Self::MAGIC {
+            return Err(anyhow!("invalid magic number (Application)"));
+        }
+
+        stream.read_exact(&mut bytes)?;
+
+        let version = usize::from_le_bytes(bytes);
+
+        if version < 3 {
+            return Err(anyhow!("invalid sjb version"));
+        }
+
+        let prog = Program::load_with_version(stream, config, version)?;
+
+        stream.read_exact(&mut bytes)?;
+        let mask = usize::from_le_bytes(bytes);
+
+        let mir = Mir::load_with_version(stream, prog.config(), version)?;
+
+        let reals = load_reals(stream)?;
+
+        Ok((prog, reals, mir, mask))
+    }
 }
 
 fn save_reals(stream: &mut impl Write, reals: &HashSet<Loc>) -> Result<()> {
@@ -851,30 +895,7 @@ impl Storage for Application {
     }
 
     fn load_with_version(stream: &mut impl Read, config: &Config, _version: usize) -> Result<Self> {
-        let mut bytes: [u8; 8] = [0; 8];
-
-        stream.read_exact(&mut bytes)?;
-
-        if usize::from_le_bytes(bytes) != Self::MAGIC {
-            return Err(anyhow!("invalid magic number (Application)"));
-        }
-
-        stream.read_exact(&mut bytes)?;
-
-        let version = usize::from_le_bytes(bytes);
-
-        if version < 3 {
-            return Err(anyhow!("invalid sjb version"));
-        }
-
-        let prog = Program::load_with_version(stream, config, version)?;
-
-        stream.read_exact(&mut bytes)?;
-        let mask = usize::from_le_bytes(bytes);
-
-        let mir = Mir::load_with_version(stream, prog.config(), version)?;
-
-        let reals = load_reals(stream)?;
+        let (prog, reals, mir, mask) = Self::read_parts(stream, config)?;
 
         let mut app = Application::with_mir(prog, reals, mir)?;
 
