@@ -240,7 +240,8 @@ impl RiscV {
         } else {
             self.load_x_from_label(Self::a0, &format!("_env_{}_", op));
             self.emit(rvv! {addi x(Self::a1), x(STACK), ofs});
-            self.emit(rvv! {addi x(Self::a2), x(Self::zero), num_args});
+            // num_args can be SLICE_CAP = 2048, beyond addi's 12-bit signed immediate
+            self.li(Self::a2, num_args as i32);
             self.emit(rvv! {addi x(Self::a3), x(STACK), 0});
         }
 

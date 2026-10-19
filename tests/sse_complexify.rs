@@ -2,6 +2,7 @@
 //! which has no special cases there any more: it has the scalar AVX generator's complex
 //! products and quotients (`times_complex`, `divide_complex`, with emulated fused operations)
 //! and its `not` keeps the source register.
+#![cfg(target_arch = "x86_64")]
 mod common;
 use common::base_config;
 
@@ -61,6 +62,10 @@ fn close(got: Complex<f64>, expected: Complex<f64>) -> bool {
 
 #[test]
 fn sse_complexified_kernels_match_bytecode() -> Result<()> {
+    if cfg!(not(target_arch = "x86_64")) {
+        return Ok(());
+    }
+
     let points = [
         [
             Complex::new(0.5, 0.25),
@@ -118,6 +123,10 @@ fn sse_complexified_kernels_match_bytecode() -> Result<()> {
 /// operations, comparisons and `ifelse` must not modify their sources.
 #[test]
 fn sse_real_kernels_match_bytecode() -> Result<()> {
+    if cfg!(not(target_arch = "x86_64")) {
+        return Ok(());
+    }
+
     let build = |ty: CompilerType, opt_level: u8| -> Result<Translator> {
         let mut config = base_config();
         config.ty = ty;
