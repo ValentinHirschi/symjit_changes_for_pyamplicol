@@ -296,6 +296,24 @@ class Regressions(unittest.TestCase):
             self.skipTest(str(e))
         self.assertTrue(len(text) > 0)
 
+    def test_vectorized_ode_models_are_rejected(self):
+        # the vectorized (indirect) kernels have no room for an ODE model's derivatives, which
+        # overwrote the registers the kernel had saved on the stack (segfault); now an error
+        import symjit
+
+        path = os.path.join(os.path.dirname(__file__), "..", "..", "examples", "cellml", "beeler.json")
+        with open(path) as fd:
+            f = symjit.compile_json(fd.read())
+        c = f.compiler
+        buf = np.zeros((max(c.count_states, c.count_obs), 5))
+        buf[1:9] = np.array(f.get_u0())[:, None]
+        with self.assertRaisesRegex(ValueError, "vectorized calls of ODE models"):
+            c.execute_vectorized(buf)
+        # the scalar call still works
+        d = f(0.0, f.get_u0(), *f.get_p())
+        self.assertEqual(len(d), 8)
+        self.assertTrue(np.all(np.isfinite(d)))
+
 
 if __name__ == "__main__":
     unittest.main()

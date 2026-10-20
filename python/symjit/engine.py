@@ -514,12 +514,22 @@ class RustyCompiler:
             raise ValueError("cannot execute the model")
 
     def execute_vectorized(self, buf: NDArray):
+        if self.count_diffs > 0:
+            raise ValueError(
+                "vectorized calls of ODE models (JSON models with `odes`) are not supported; "
+                "call the function at one point at a time"
+            )
         ptr = buf.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         n = buf.shape[1]
         if not lib.execute_vectorized(self.p, ptr, n):
             raise ValueError("cannot execute the model")
 
     def execute_matrix(self, states: Matrix, obs: Matrix):
+        if self.count_diffs > 0:
+            raise ValueError(
+                "vectorized calls of ODE models (JSON models with `odes`) are not supported; "
+                "call the function at one point at a time"
+            )
         if not lib.execute_matrix(self.p, states.p, obs.p):
             raise ValueError("cannot execute the model")
 

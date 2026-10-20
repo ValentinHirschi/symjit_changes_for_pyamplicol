@@ -160,79 +160,25 @@ impl Complexifier {
         self.mir.times(Self::T0, Self::T0, Self::T1);
     }
 
-    /// A real scratch register (a part of `Temp`, or `Ret`) that is none of `busy`.
-    fn stable_scratch(busy: &[Reg]) -> Reg {
-        [Reg::Gen(0), Reg::Gen(1), Reg::Ret]
-            .into_iter()
-            .find(|r| !busy.contains(r))
-            .unwrap()
-    }
-
-    /// Writes (xs, ys) to `dst`; xs and ys are real scratch registers.
-    fn stable_store(&mut self, dst: Reg, xs: Reg, ys: Reg) {
-        if re(dst) == ys {
-            self.mir.fmov(im(dst), ys);
-            self.mir.fmov(re(dst), xs);
-        } else {
-            self.mir.fmov(re(dst), xs);
-            self.mir.fmov(im(dst), ys);
-        }
-    }
-
-    /// `stable_divide` for a `dst` that is not a `Gen` pair (e.g. `Ret`, a call argument,
-    /// whose real part is also `Ret`).
-    fn stable_divide_general(&mut self, dst: Reg, s1: Reg, s2: Reg) {
-        let (a, c, d) = (re(s1), re(s2), im(s2));
-        let (t0, t1) = (Self::T0, Self::T1);
-
-        self.stable_divisor_scale(c, d); // T0 = k
-        self.mir.times(t1, c, t0); // c'
-
-        if self.is_real_reg(s1) {
-            let x = Self::stable_scratch(&[a]);
-            self.mir.times(x, d, t0); // d'
-            self.mir.times(t0, a, t0); // a'
-            let y = Self::stable_scratch(&[x]);
-            self.mir.times(y, t1, t1);
-            self.mir.fused_mul_add(y, x, x, y); // c'^2 + d'^2
-            self.mir.times(t1, t0, t1); // a'c'
-            self.mir.times(x, t0, x); // a'd'
-            self.mir.neg(x, x);
-            self.mir.divide(x, x, y);
-            self.mir.divide(t1, t1, y);
-            self.stable_store(dst, t1, x);
-        } else {
-            let b = im(s1);
-            let x = Self::stable_scratch(&[a, b]);
-            self.mir.times(x, d, t0); // d'
-            let y = Self::stable_scratch(&[b, x]);
-            self.mir.times(y, a, t0); // a'
-            self.mir.times(t0, b, t0); // b'
-            let z = Self::stable_scratch(&[x, y]);
-            self.mir.times(z, t0, x);
-            self.mir.fused_mul_add(z, y, t1, z); // a'c' + b'd'
-            self.mir.times(y, y, x);
-            self.mir.fused_mul_sub(y, t1, t0, y); // c'b' - a'd'
-            self.mir.times(t0, t1, t1);
-            self.mir.fused_mul_add(t0, x, x, t0); // c'^2 + d'^2
-            self.mir.divide(t1, z, t0);
-            self.mir.divide(x, y, t0);
-            self.stable_store(dst, t1, x);
-        }
-    }
-
     /// `dst := s1 / s2` for a complex `s2`, with both operands scaled by `stable_divisor_scale`
     /// (exact, so in the normal range the result has the bits of the default code). `s1` may
-    /// be real. The fallback formula (`dst` not a `Gen` register) is that of
-    /// `divide_complex` of the scalar generators.
+    /// be real.
+    ///
+    /// The scaled operands a', b' (numerator) and c', d' (divisor) go to `Gen(0)`, `Gen(1)`
+    /// and to `dst`. A `dst` that is not a `Gen` pair is `Left`, whose parts are the machine
+    /// registers `Ret` and `Temp`: a quotient passed straight to a call by the indirect
+    /// translator at opt level >= 1. Then the numerator goes to `dst` and the divisor to
+    /// `Gen(0)`, `Gen(1)`, because the generators' `divide_complex` (non-fast complex) uses
+    /// `Reg::Temp` as scratch after it has read the first operand but before it reads the second
+    /// (tests/stable_divide_call_argument.rs).
     fn stable_divide(&mut self, dst: Reg, s1: Reg, s2: Reg) {
         let (a, b, c, d) = (re(s1), im(s1), re(s2), im(s2));
         let (t0, t1) = (Self::T0, Self::T1);
-        let (a_, b_, c_, d_) = (Reg::Gen(0), Reg::Gen(1), Reg::Ret, re(dst));
-
-        if !matches!(dst, Reg::Gen(_)) {
-            return self.stable_divide_general(dst, s1, s2);
-        }
+        let (a_, b_, c_, d_) = if !matches!(dst, Reg::Gen(_)) {
+            (re(dst), im(dst), Reg::Gen(0), Reg::Gen(1))
+        } else {
+            (Reg::Gen(0), Reg::Gen(1), re(dst), im(dst))
+        };
 
         assert!(s1 != Reg::Ret && s1 != Reg::Temp);
         assert!(s2 != Reg::Ret && s2 != Reg::Temp);

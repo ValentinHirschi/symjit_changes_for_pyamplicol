@@ -479,6 +479,11 @@ pub unsafe extern "C" fn execute_vectorized(
     let q: &mut CompilerResult = unsafe { &mut *q };
 
     if let Some(app) = &mut q.app {
+        // ODE models (JSON models with `odes`) have no vectorized form: the indirect kernels
+        // have no room for their derivatives (`Application::exec_vectorized`).
+        if app.count_diffs > 0 {
+            return false;
+        }
         let h = usize::max(app.count_states, app.count_obs);
         let p: &mut [f64] = unsafe { std::slice::from_raw_parts_mut(buf, h * n) };
         let mut states = Matrix::from_buf(p, h, n);
@@ -875,6 +880,11 @@ pub unsafe extern "C" fn execute_matrix(
     let obs: &mut Matrix = unsafe { &mut *obs };
 
     if let Some(app) = &mut q.app {
+        // ODE models (JSON models with `odes`) have no vectorized form: the indirect kernels
+        // have no room for their derivatives (`Application::exec_vectorized`).
+        if app.count_diffs > 0 {
+            return false;
+        }
         app.exec_vectorized(states, obs);
         true
     } else {

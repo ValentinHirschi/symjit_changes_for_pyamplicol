@@ -521,6 +521,14 @@ impl Application {
     }
 
     pub fn exec_vectorized(&mut self, states: &mut Matrix, obs: &mut Matrix) {
+        // An ODE model (`count_diffs > 0`, JSON models with `odes`) writes its derivatives after
+        // the observables, past the stack frame of the indirect kernels, which hold only the
+        // states and observables: it would corrupt the stack. Its vectorized form is not supported.
+        assert!(
+            self.count_diffs == 0,
+            "vectorized calls of ODE models are not supported"
+        );
+
         if let Some(compiled) = &self.compiled {
             if !compiled.support_indirect() {
                 self.exec_vectorized_simple(states, obs);
