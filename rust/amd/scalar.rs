@@ -678,8 +678,8 @@ impl Generator for AmdScalarGenerator {
         idx_ret: i32,
     ) {
         self.amd.vmovsd_xmm_mem(0, MEM, idx_ret * REG_SIZE as i32);
-        self.vzeroupper();
         load_nonvolatile_regs_fast(&mut self.amd);
+        self.vzeroupper();
         self.amd.ret();
     }
 
@@ -760,6 +760,7 @@ impl AmdScalarGenerator {
 
         self.set_label("@done");
         load_nonvolatile_regs(&mut self.amd);
+        self.vzeroupper();
         self.amd.ret();
     }
 
@@ -770,6 +771,7 @@ impl AmdScalarGenerator {
 
     fn epilogue_symbolica(&mut self, _regions: &StackRegions) {
         load_nonvolatile_regs(&mut self.amd);
+        self.vzeroupper();
         self.amd.ret();
     }
 }

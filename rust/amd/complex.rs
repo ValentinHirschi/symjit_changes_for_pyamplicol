@@ -912,6 +912,7 @@ impl Generator for AmdComplexGenerator {
         self.amd.vmovdd_xmm_mem(0, MEM, idx_ret * REG_SIZE as i32);
         self.vzeroupper();
         load_nonvolatile_regs_fast(&mut self.amd);
+        self.vzeroupper();
         self.amd.ret();
     }
 
@@ -992,6 +993,7 @@ impl AmdComplexGenerator {
 
         self.set_label("@done");
         load_nonvolatile_regs(&mut self.amd);
+        self.vzeroupper();
         self.amd.ret();
     }
 
@@ -1002,6 +1004,7 @@ impl AmdComplexGenerator {
 
     fn epilogue_symbolica(&mut self, _regions: &StackRegions) {
         load_nonvolatile_regs(&mut self.amd);
+        self.vzeroupper();
         self.amd.ret();
     }
 }

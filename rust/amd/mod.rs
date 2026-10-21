@@ -89,7 +89,6 @@ fn save_nonvolatile_regs(amd: &mut Amd) {
 }
 
 fn load_nonvolatile_regs(amd: &mut Amd) {
-    amd.vzeroupper();
     amd.mov(SP, Amd::RBP);
     amd.mov_reg_mem(MEM, SP, 0x00);
     amd.mov_reg_mem(STATES, SP, 0x08);
@@ -111,7 +110,6 @@ fn save_nonvolatile_regs_fast(amd: &mut Amd) {
 }
 
 fn load_nonvolatile_regs_fast(amd: &mut Amd) {
-    amd.vzeroupper();
     amd.mov(SP, Amd::RBP);
     amd.mov_reg_mem(MEM, SP, 0x00);
     amd.mov_reg_mem(STATES, SP, 0x08);
