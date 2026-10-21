@@ -889,6 +889,7 @@ impl AmdVectorF64x4Generator {
 
         self.set_label("@done");
         load_nonvolatile_regs(&mut self.amd);
+        self.vzeroupper();
         self.amd.ret();
     }
 
@@ -943,6 +944,7 @@ impl AmdVectorF64x4Generator {
 
         self.set_label("@done");
         load_nonvolatile_regs(&mut self.amd);
+        self.vzeroupper();
         self.amd.ret();
     }
 }
