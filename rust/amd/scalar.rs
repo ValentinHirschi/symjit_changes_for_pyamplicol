@@ -6,6 +6,7 @@ use crate::symbol::Loc;
 use crate::utils::align_stack;
 use crate::utils::{DataType, Reg};
 use anyhow::Result;
+use libc::RBP;
 
 use super::asm::{Amd, RoundingMode};
 use super::*;
@@ -728,11 +729,16 @@ impl Generator for AmdScalarGenerator {
         if cfg!(target_family = "windows") {
             for r in used {
                 let phys_reg = ϕ(*r);
-                if (6..=15).contains(&phys_reg) {
-                    // self.save_stack(*r, phys_reg as u32);
+                if (6..=10).contains(&phys_reg) {
                     self.amd.vmovdd_mem_xmm(
                         STACK,
                         (((phys_reg - 6) * 2 + 6) as u32 * REG_SIZE) as i32,
+                        phys_reg,
+                    );
+                } else if (11..=15).contains(&phys_reg) {
+                    self.amd.vmovdd_mem_xmm(
+                        Amd::RBP,
+                        (((phys_reg - 11) * 2 + 6) as u32 * REG_SIZE) as i32,
                         phys_reg,
                     );
                 }
@@ -748,12 +754,17 @@ impl Generator for AmdScalarGenerator {
         if cfg!(target_family = "windows") {
             for r in used {
                 let phys_reg = ϕ(*r);
-                if (6..=15).contains(&phys_reg) {
-                    // self.load_stack(*r, phys_reg as u32);
+                if (6..=10).contains(&phys_reg) {
                     self.amd.vmovdd_xmm_mem(
                         phys_reg,
                         STACK,
                         (((phys_reg - 6) * 2 + 6) as u32 * REG_SIZE) as i32,
+                    );
+                } else if (11..=15).contains(&phys_reg) {
+                    self.amd.vmovdd_xmm_mem(
+                        phys_reg,
+                        Amd::RBP,
+                        (((phys_reg - 11) * 2 + 6) as u32 * REG_SIZE) as i32,
                     );
                 }
             }

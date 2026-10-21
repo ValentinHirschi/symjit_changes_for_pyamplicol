@@ -51,12 +51,7 @@ pub const STABLE_MATH: u32 = 0x0800_0000;
 // remaining bits:
 // 0x8000_0000
 
-#[cfg(not(target_os = "windows"))]
-pub const SPILL_AREA: usize = 6;
-
-#[cfg(target_os = "windows")]
-pub const SPILL_AREA: usize = 26;
-
+pub const SPILL_AREA: usize = 16;
 pub const ABI_AREA: usize = SPILL_AREA;
 pub const SLICE_CAP: usize = 2048;
 

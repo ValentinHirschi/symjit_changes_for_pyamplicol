@@ -62,10 +62,18 @@ const PARAMS: u8 = Amd::R15;
 const STACK: u8 = Amd::RBX;
 const SP: u8 = Amd::RSP;
 
+fn volatile_area_size() -> u32 {
+    if cfg!(target_os = "windows") {
+        48 + 5 * 16
+    } else {
+        48
+    }
+}
+
 fn save_nonvolatile_regs(amd: &mut Amd) {
     amd.a.set_label("@self");
     amd.push(Amd::RBP);
-    amd.sub_rsp(48);
+    amd.sub_rsp(volatile_area_size());
     amd.mov_mem_reg(SP, 0x00, MEM);
     amd.mov_mem_reg(SP, 0x08, STATES);
     amd.mov_mem_reg(SP, 0x10, IDX);
@@ -88,7 +96,7 @@ fn load_nonvolatile_regs(amd: &mut Amd) {
     amd.mov_reg_mem(IDX, SP, 0x10);
     amd.mov_reg_mem(PARAMS, SP, 0x18);
     amd.mov_reg_mem(STACK, SP, 0x20);
-    amd.add_rsp(48);
+    amd.add_rsp(volatile_area_size());
     amd.pop(Amd::RBP);
 }
 
@@ -176,8 +184,14 @@ fn stable_consts(amd: &mut Amd, num_labels: usize) {
     for (label, val) in [
         ("_stable_floor_", f64::MIN_POSITIVE),
         ("_stable_inf_", f64::INFINITY),
-        ("_stable_floor_finite_", f64::from_bits(0x0020_0000_0000_0000)),
-        ("_stable_mask_finite_", f64::from_bits(0x7fe0_0000_0000_0000)),
+        (
+            "_stable_floor_finite_",
+            f64::from_bits(0x0020_0000_0000_0000),
+        ),
+        (
+            "_stable_mask_finite_",
+            f64::from_bits(0x7fe0_0000_0000_0000),
+        ),
         ("_stable_quarter_", 0.25),
     ] {
         amd.a.set_label(label);
