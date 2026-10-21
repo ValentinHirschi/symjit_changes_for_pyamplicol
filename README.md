@@ -1,9 +1,9 @@
 # Introduction
-[Release Notes](NEWS.md)
+[Release Notes](CHANGELOG.md)
 
 **SymJit** is a lightweight just-in-time (JIT) compiler that directly translates *SymPy* expressions into machine code without using a separate library such as LLVM. Its main utility is to generate fast numerical functions to feed into various numerical solvers provided by the NumPy/SciPy ecosystem, including numerical integration routines, ordinary differential equation (ODE) solvers, and image filtering functions. It is also able to generate `LowLevelCallable` functions for better coupling to certain fast Scipy numerical functions.
 
-SymJit has two different code-generating backends. The default is a Rust library with minimum external dependencies. The Rust backend generates **AMD64** (also known as x86-64), **ARM64** (also known as aarch64), and 64-bit **RISC-V** (riscv64) machine code on Linux, Windows, and Darwin (MacOS) platforms. The Python backend is written in plain Python, relies solely on the Python standard library and NumPy, is considered obsolete, and will be moved to a separate package as of version 3.0.
++SymJit has two different code-generating backends. The default is a Rust library with minimum external dependencies. The Rust backend generates **AMD64** (also known as x86-64), **ARM64** (also known as aarch64), and 64-bit **RISC-V** (riscv64) machine code on Linux, Windows, and Darwin (MacOS) platforms. The Python backend is written in plain Python, relies solely on the Python standard library and NumPy, is considered obsolete, and is moved to a separate package [pysymjit](https://github.com/siravan/pysymjit).
 
 The following table shows the supported CPU profiles and operating systems. Tier-1 are heavily tested and receive the latest features. Tier-2 are also distributed as binary and pass the test suite; however, they may not have the full features and optimizations. Tier-3 may work but are not routinely tested. 
 
@@ -22,9 +22,18 @@ The following table shows the supported CPU profiles and operating systems. Tier
 | Tier 3 | MacOS x64                    |                    |
 
 
-Symjit in the central package of a [family of JIT compilers](./docs/COMPANIOS.md). Moreover, SymJit is the JIT backend for the [Symbolica](./docs/SYMBOLICA.md) computer algebra system. 
+Symjit is the central package of a [family of JIT compilers](./docs/COMPANIONS.md). SymJit is the JIT backend for the [Symbolica](./docs/SYMBOLICA.md) computer algebra system. 
 
-In addition to using Symjit to compile SymPy or Symbolica expressions, a low-level interface is exposed through [Composer](.docs/COMPOSER.md) interface to give the user fine-control over the generated code.
+A low-level interface is exposed through [Composer](.docs/COMPOSER.md) to give the user fine-control over the generated code.
+
+SymJit is primarily a JIT compiler; however, additional binary utilities are available from [symjit-utils](https://github.com/siravan/symjit-utils). These 
+utilities include:
+
+* `sjb2wasm`: translates a Symjit intermediate representation (IR) file (`.sjb` file) to WebAssembly.
+* `sjb2obj`: compiles an `.sjb` file and saves the compiled kernel as an object file (`.o`), which can be linked into C/C++ programs.
+* `sjb2ptx`: translates an `.sjb` file into CUDA ptx format.
+* `sjbinfo`: prints the details of an `.sjb` file, useful for debugging and optimization. 
+* `rust2sjb`: compiles a limited subset of Rust into `.sjb`. 
 
 # Installing symjit
 

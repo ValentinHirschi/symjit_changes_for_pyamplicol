@@ -1,3 +1,22 @@
+# Version 2.28.0
+
+* Code cleanup and testing.
+* Bug fixes: RISC-V calls with 2048 arguments, `Expr::si`/`ci`/`shi`/`chi`, complex loops with complex
+  conditions, SSE complex arithmetic.
+* Vectorized calls of JSON ODE models raise an error (they corrupted the stack).
+
+# Version 2.27.4
+
+* Stable math. `Config.set_stable_math` is added.
+
+# Version 2.27.3
+
+* Adding `Config.set_num_args`.
+
+# Version 2.27.2
+
+* backporting bug fixes from the dev branch.
+
 # Version 2.27.1
 
 * Repo re-organization with moving tests from `symjit-crate`.

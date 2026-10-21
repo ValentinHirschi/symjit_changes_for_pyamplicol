@@ -96,7 +96,7 @@ def compile_func(
     dtype (default `float64`): the data type. Possibilities are `float64` and `complex128`.
     use_simd (default `True`): generates SIMD code for vectorized operations. Currently supports
         AVX on x86-64 and NEON on aarch64 systems.
-    enable_avx512 (default `False`): allows using AVX512 (f64x8) SIMD type when available.
+    enable_simd512 (default `False`): allows using AVX512 (f64x8) SIMD type when available.
     use_threads (default `True`): use multi-threading to speed up parallel operations when called
         on numpy arrays.
     cse (default `True`): performs common-subexpression elimination.
@@ -215,7 +215,7 @@ def compile_ode(
     dtype (default `float64`): the data type. Possibilities are `float64` and `complex128`.
     use_simd (default `True`): generates SIMD code for vectorized operations. Currently
         supports AVX on x86-64 and NEON on aarch64 systems.
-    enable_avx512 (default `False`): allows using AVX512 (f64x8) SIMD type when available.
+    enable_simd512 (default `False`): allows using AVX512 (f64x8) SIMD type when available.
     use_threads (default `True`): use multi-threading to speed up parallel operations
         when called on numpy arrays.
     cse (default `True`): performs common-subexpression elimination.
@@ -321,7 +321,7 @@ def compile_jac(
         dtype (default `float64`): the data type. Possibilities are `float64` and `complex128`.
         use_simd (default `True`): generates SIMD code for vectorized operations. Currently
             supports AVX on x86-64 and NEON on aarch64 systems.
-        enable_avx512 (default `False`): allows using AVX512 (f64x8) SIMD type when available.
+        enable_simd512 (default `False`): allows using AVX512 (f64x8) SIMD type when available.
         use_threads (default `True`): use multi-threading to speed up parallel operations when called
             on numpy arrays.
         cse (default `True`): performs common-subexpression elimination.
@@ -498,7 +498,7 @@ def compile_evaluator(
     dtype (default `float64`): the data type. Possibilities are `float64` and `complex128`.
     use_simd (default `True`): generates SIMD code for vectorized operations. Currently supports
         AVX on x86-64 and NEON on aarch64 systems.
-    enable_avx512 (default `False`): allows using AVX512 (f64x8) SIMD type when available.
+    enable_simd512 (default `False`): allows using AVX512 (f64x8) SIMD type when available.
     use_threads (default `False`): currently not supported for the Symbolica bridge.
     cse (default `False`): performs common-subexpression elimination.
     fastmath (default `False`): use fastmath floating point operations, especially fused multiply-addition.
@@ -641,7 +641,7 @@ def compile_composer(
     dtype (default `float64`): the data type. Possibilities are `float64` and `complex128`.
     use_simd (default `True`): generates SIMD code for vectorized operations. Currently supports
         AVX on x86-64 and NEON on aarch64 systems.
-    enable_avx512 (default `False`): allows using AVX512 (f64x8) SIMD type when available.
+    enable_simd512 (default `False`): allows using AVX512 (f64x8) SIMD type when available.
     use_threads (default `True`): currently not supported for the Symbolica bridge.
     cse (default `True`): performs common-subexpression elimination.
     fastmath (default `False`): use fastmath floating point operations, especially fused multiply-addition.
