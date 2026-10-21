@@ -152,6 +152,7 @@ fn save_used_registers(
     f: fn(amd: &mut Amd, rm: u8, offset: i32, reg: u8),
     used: &[Reg],
     reg_size: i32,
+    ϕ: fn(r: Reg) -> u8,
 ) {
     if cfg!(target_family = "windows") {
         for r in used {
@@ -180,6 +181,7 @@ fn load_used_registers(
     f: fn(amd: &mut Amd, rm: u8, reg: u8, offset: i32),
     used: &[Reg],
     reg_size: i32,
+    ϕ: fn(r: Reg) -> u8,
 ) {
     amd.a.set_label("@success");
     amd.xor(Amd::RAX, Amd::RAX);

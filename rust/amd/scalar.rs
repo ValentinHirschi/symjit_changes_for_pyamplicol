@@ -716,11 +716,11 @@ impl Generator for AmdScalarGenerator {
     }
 
     fn save_used_registers(&mut self, used: &[Reg]) {
-        save_used_registers(&mut self.amd, Amd::vmovdd_mem_xmm, used, REG_SIZE as i32);
+        save_used_registers(&mut self.amd, Amd::vmovdd_mem_xmm, used, REG_SIZE as i32, ϕ);
     }
 
     fn load_used_registers(&mut self, used: &[Reg]) {
-        load_used_registers(&mut self.amd, Amd::vmovdd_xmm_mem, used, REG_SIZE as i32);
+        load_used_registers(&mut self.amd, Amd::vmovdd_xmm_mem, used, REG_SIZE as i32, ϕ);
     }
 }
 
