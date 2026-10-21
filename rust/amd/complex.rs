@@ -857,10 +857,7 @@ impl Generator for AmdComplexGenerator {
 
     #[cfg(target_family = "unix")]
     fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
-        self.amd.push(Amd::RBP);
-        self.amd.push(STACK);
-        self.amd.push(MEM);
-        self.amd.mov(Amd::RBP, SP);
+        save_nonvolatile_regs_fast(&mut self.amd);
 
         let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
         sub_rsp(&mut self.amd, frame_size);
@@ -877,10 +874,7 @@ impl Generator for AmdComplexGenerator {
 
     #[cfg(target_family = "windows")]
     fn prologue_fast(&mut self, cap: usize, count_states: usize, count_obs: usize) {
-        self.amd.push(Amd::RBP);
-        self.amd.push(STACK);
-        self.amd.push(MEM);
-        self.amd.mov(Amd::RBP, SP);
+        save_nonvolatile_regs_fast(&mut self.amd);
 
         let frame_size = align_stack((count_states + count_obs) as u32 * REG_SIZE);
         sub_rsp(&mut self.amd, frame_size);
@@ -917,10 +911,7 @@ impl Generator for AmdComplexGenerator {
         self.vzeroupper();
         self.amd.vmovdd_xmm_mem(0, MEM, idx_ret * REG_SIZE as i32);
         self.vzeroupper();
-        self.amd.mov(SP, Amd::RBP);
-        self.amd.pop(MEM);
-        self.amd.pop(STACK);
-        self.amd.pop(Amd::RBP);
+        load_nonvolatile_regs_fast(&mut self.amd);
         self.amd.ret();
     }
 
@@ -957,49 +948,11 @@ impl Generator for AmdComplexGenerator {
     }
 
     fn save_used_registers(&mut self, used: &[Reg]) {
-        if cfg!(target_family = "windows") {
-            for r in used {
-                let phys_reg = ϕ(*r);
-                if (6..=10).contains(&phys_reg) {
-                    self.amd.vmovdd_mem_xmm(
-                        STACK,
-                        (((phys_reg - 6) * 2 + 6) as u32 * REG_SIZE) as i32,
-                        phys_reg,
-                    );
-                } else if (11..=15).contains(&phys_reg) {
-                    self.amd.vmovdd_mem_xmm(
-                        Amd::RBP,
-                        (((phys_reg - 11) * 2 + 6) as u32 * REG_SIZE) as i32,
-                        phys_reg,
-                    );
-                }
-            }
-        }
+        save_used_registers(&mut self.amd, Amd::vmovdd_mem_xmm, used, REG_SIZE as i32);
     }
 
     fn load_used_registers(&mut self, used: &[Reg]) {
-        self.set_label("@success");
-        self.amd.xor(Amd::RAX, Amd::RAX);
-        self.set_label("@epilogue");
-
-        if cfg!(target_family = "windows") {
-            for r in used {
-                let phys_reg = ϕ(*r);
-                if (6..=10).contains(&phys_reg) {
-                    self.amd.vmovdd_xmm_mem(
-                        phys_reg,
-                        STACK,
-                        (((phys_reg - 6) * 2 + 6) as u32 * REG_SIZE) as i32,
-                    );
-                } else if (11..=15).contains(&phys_reg) {
-                    self.amd.vmovdd_xmm_mem(
-                        phys_reg,
-                        Amd::RBP,
-                        (((phys_reg - 11) * 2 + 6) as u32 * REG_SIZE) as i32,
-                    );
-                }
-            }
-        }
+        load_used_registers(&mut self.amd, Amd::vmovdd_xmm_mem, used, REG_SIZE as i32);
     }
 }
 

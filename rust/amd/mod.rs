@@ -100,6 +100,26 @@ fn load_nonvolatile_regs(amd: &mut Amd) {
     amd.pop(Amd::RBP);
 }
 
+fn save_nonvolatile_regs_fast(amd: &mut Amd) {
+    amd.a.set_label("@self");
+    amd.push(Amd::RBP);
+    amd.sub_rsp(volatile_area_size());
+    amd.mov_mem_reg(SP, 0x00, MEM);
+    amd.mov_mem_reg(SP, 0x08, STATES);
+    amd.mov_mem_reg(SP, 0x20, STACK);
+    amd.mov(Amd::RBP, SP);
+}
+
+fn load_nonvolatile_regs_fast(amd: &mut Amd) {
+    amd.vzeroupper();
+    amd.mov(SP, Amd::RBP);
+    amd.mov_reg_mem(MEM, SP, 0x00);
+    amd.mov_reg_mem(STATES, SP, 0x08);
+    amd.mov_reg_mem(STACK, SP, 0x20);
+    amd.add_rsp(volatile_area_size());
+    amd.pop(Amd::RBP);
+}
+
 fn allocate_stack(amd: &mut Amd, size: u32, _with_arena: bool) {
     sub_rsp(amd, align_stack(size));
     amd.and_imm(SP, 0xffffffc0);
@@ -125,6 +145,66 @@ fn sub_rsp(amd: &mut Amd, mut size: u32) {
     }
 
     amd.sub_rsp(size);
+}
+
+fn save_used_registers(
+    amd: &mut Amd,
+    f: fn(amd: &mut Amd, rm: u8, offset: i32, reg: u8),
+    used: &[Reg],
+    reg_size: i32,
+) {
+    if cfg!(target_family = "windows") {
+        for r in used {
+            let phys_reg = ϕ(*r);
+            if (6..=10).contains(&phys_reg) {
+                f(
+                    amd,
+                    STACK,
+                    ((phys_reg - 6) * 2 + 6) as u32 as i32 * reg_size,
+                    phys_reg,
+                );
+            } else if (11..=15).contains(&phys_reg) {
+                f(
+                    amd,
+                    Amd::RBP,
+                    ((phys_reg - 11) * 2 + 6) as u32 as i32 * reg_size,
+                    phys_reg,
+                );
+            }
+        }
+    }
+}
+
+fn load_used_registers(
+    amd: &mut Amd,
+    f: fn(amd: &mut Amd, rm: u8, reg: u8, offset: i32),
+    used: &[Reg],
+    reg_size: i32,
+) {
+    amd.a.set_label("@success");
+    amd.xor(Amd::RAX, Amd::RAX);
+    amd.a.set_label("@epilogue");
+
+    if cfg!(target_family = "windows") {
+        for r in used {
+            let phys_reg = ϕ(*r);
+            if (6..=10).contains(&phys_reg) {
+                f(
+                    amd,
+                    phys_reg,
+                    STACK,
+                    ((phys_reg - 6) * 2 + 6) as u32 as i32 * reg_size,
+                );
+            } else if (11..=15).contains(&phys_reg) {
+                f(
+                    amd,
+                    phys_reg,
+                    Amd::RBP,
+                    ((phys_reg - 11) * 2 + 6) as u32 as i32 * reg_size,
+                );
+            }
+        }
+    }
 }
 
 /*
