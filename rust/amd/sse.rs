@@ -706,7 +706,12 @@ impl Generator for AmdSSEGenerator {
             for r in used {
                 let phys_reg = ϕ(*r);
                 if (6..=15).contains(&phys_reg) {
-                    self.save_stack(*r, phys_reg as u32);
+                    // self.save_stack(*r, phys_reg as u32);
+                    self.amd.movdd_mem_xmm(
+                        STACK,
+                        (((phys_reg - 6) * 2 + 6) as u32 * REG_SIZE) as i32,
+                        phys_reg,
+                    );
                 }
             }
         }
@@ -721,7 +726,12 @@ impl Generator for AmdSSEGenerator {
             for r in used {
                 let phys_reg = ϕ(*r);
                 if (6..=15).contains(&phys_reg) {
-                    self.load_stack(*r, phys_reg as u32);
+                    // self.load_stack(*r, phys_reg as u32);
+                    self.amd.movdd_xmm_mem(
+                        phys_reg,
+                        STACK,
+                        (((phys_reg - 6) * 2 + 6) as u32 * REG_SIZE) as i32,
+                    );
                 }
             }
         }

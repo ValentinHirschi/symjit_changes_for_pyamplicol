@@ -1060,6 +1060,12 @@ impl Amd {
         self.modrm_mem(reg, rm, offset);
     }
 
+    pub fn movdd_xmm_mem(&mut self, reg: u8, rm: u8, offset: i32) {
+        self.sse_pd(reg, rm);
+        self.append_byte(0x10);
+        self.modrm_mem(reg, rm, offset);
+    }
+
     pub fn movsd_xmm_indexed(&mut self, reg: u8, base: u8, index: u8, scale: u8) {
         self.sse_sd_index(reg, base, index);
         self.append_byte(0x10);
@@ -1078,6 +1084,12 @@ impl Amd {
 
     pub fn movsd_mem_xmm(&mut self, rm: u8, offset: i32, reg: u8) {
         self.sse_sd(reg, rm);
+        self.append_byte(0x11);
+        self.modrm_mem(reg, rm, offset);
+    }
+
+    pub fn movdd_mem_xmm(&mut self, rm: u8, offset: i32, reg: u8) {
+        self.sse_pd(reg, rm);
         self.append_byte(0x11);
         self.modrm_mem(reg, rm, offset);
     }
