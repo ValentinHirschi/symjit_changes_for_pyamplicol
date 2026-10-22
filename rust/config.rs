@@ -1181,14 +1181,15 @@ impl Storage for Config {
         let opt: u32 = (val & 0xffffffff) as u32;
         let ty: u32 = (val >> 32) as u32;
 
-        stream.read_exact(&mut bytes)?;
-        let stack: usize = usize::from_le_bytes(bytes);
-
-        let args: u32 = if version == 3 {
-            Config::default().num_args()
+        // sjb version 3 (symjit 2.22 to 2.26) saves neither the stack limit nor the argument
+        // count; version 4 (2.27 on) saves both
+        let (stack, args): (usize, u32) = if version == 3 {
+            (DEFAULT_STACK_LIMIT, Config::default().num_args())
         } else {
             stream.read_exact(&mut bytes)?;
-            usize::from_le_bytes(bytes) as u32
+            let stack = usize::from_le_bytes(bytes);
+            stream.read_exact(&mut bytes)?;
+            (stack, usize::from_le_bytes(bytes) as u32)
         };
 
         let ty: CompilerType = match ty {

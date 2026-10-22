@@ -145,6 +145,20 @@ fn sub_rsp(amd: &mut Amd, mut size: u32) {
     amd.sub_rsp(size);
 }
 
+/*
+ * Note that there are two areas to save the registers. xmm6-xmm10 are saved in
+ * the standard spill area. xmm11-xmm15 are saved in an additional area on top
+ * of the stack allocated by save_nonvolatile_regs. These setup in not ideal.
+ * We considered two other options but ruled them out:
+ *
+ * 1. Increasing SPILL_AREA to 26: this would work, but makes older sjb files
+ * not compatible with the new version. In addition, it would be wasteful of
+ * stack area in Linux.
+ *
+ * 2. Increasing SPILL_AREA to 26 on Windows, but keep it at 16 in other
+ * platforms. Again, incompatible sjb files, even going forward between Linus
+ * and Windows.
+ */
 fn save_used_registers(
     amd: &mut Amd,
     f: fn(amd: &mut Amd, rm: u8, offset: i32, reg: u8),

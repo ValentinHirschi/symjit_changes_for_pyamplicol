@@ -109,8 +109,10 @@ bit field in `RustyCompiler.__init__` (`engine.py`) that must match the constant
 `amd-avx`, `amd-sse`, `arm`, `riscv`, `bytecode`, `debug`, or a `.toml` path; `Config::from_name` also takes
 `"native;key=value;..."`. `coroutines=True` turns on lockstep evaluation with fixed `yield_every` 10000 and
 `lockstep` 256. `measure(...)` keys: `ker-scalar-size`, `ker-simd-size`, `ker-fast-size`, `mir-size`,
-`mir-bytes`, `stack-size`, `async`, `version`. Saved `.sjb` files are version 4 (versions 3 and 4 load);
-`Application::read_sjb` reads one without compiling it.
+`mir-bytes`, `stack-size`, `async`, `version`. Saved `.sjb` files are version 4 (2.27 on: the `Config`
+holds the stack limit and argument count); version 3 (2.22–2.26, e.g. pyAmpliCol's kernels, symjit
+2.26.4) has neither, and loads with the defaults (`tests/sjb_version3.rs`; until 2026-10-21 version-3
+files failed with `invalid magic number (Program)`). `Application::read_sjb` reads one without compiling it.
 
 Examples (`examples/*.py`) double as smoke tests and take options through `examples/util.py`;
 `examples/claude/` holds larger studies; `bench/run.py` (`bench/README.md`) times workloads against a
