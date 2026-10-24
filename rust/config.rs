@@ -1009,8 +1009,21 @@ impl Default for Config {
             Err(_) => "symjit.toml".into(),
         };
 
-        if std::fs::exists(&toml).unwrap() {
-            Self::from_toml(&toml, 0).unwrap()
+        // A path whose existence cannot be checked, or a file that cannot be read or parsed
+        // (e.g. an unrelated `symjit.toml` in the working directory), is reported and ignored:
+        // panicking here would abort every caller, including loads of valid saved applications.
+        let configured = match std::fs::exists(&toml) {
+            Ok(true) => Self::from_toml(&toml, 0).map(Some),
+            Ok(false) => Ok(None),
+            Err(error) => Err(error.into()),
+        }
+        .unwrap_or_else(|error| {
+            eprintln!("warning: ignoring SymJIT configuration file {toml}: {error}");
+            None
+        });
+
+        if let Some(config) = configured {
+            config
         } else {
             Config::new(
                 CompilerType::Native,
