@@ -395,7 +395,7 @@ is possible, but still needs extreme caution due to various race conditions. Use
 
 All `compile_*` functions accept an optional parameter `ty`, which defines the type of the code to generate. Currently, the possible values are:
 
-* `amd`: generates 64-bit AMD64/x86-64 code. If the processor supports AVX, then this is equivalent to passing `amd-avx`; otherwise, it is equal to `amd-sse`.
+* `amd`: generates 64-bit AMD64/x86-64 code. If the processor supports AVX and FMA3, then this is equivalent to passing `amd-avx`; otherwise, it is equal to `amd-sse`.
 * `amd-avx`: generates 64-bit AMD64/x86-64 AVX code.
 * `amd-sse`: generates 64-bit AMD64/x86-64 SSE code. It requires a minimum SSE2.1 specification, which should be easily fulfilled by all except the most ancient processors (will be deprecated in version 3.0).
 * `arm` generates 64-bit ARM64/aarch64 code. This option is mainly tested on Apple Silicon.

@@ -124,7 +124,7 @@ fn select_instruction_accepts_both_wire_formats_without_inactive_nan_leaks() -> 
             assert_eq!(app.evaluate_single::<f64>(&[0., f64::NAN, 7.]), 7.);
             assert_eq!(app.evaluate_single::<f64>(&[1., 11., f64::NAN]), 11.);
             #[cfg(target_arch = "x86_64")]
-            if is_x86_feature_detected!("avx") {
+            if is_x86_feature_detected!("avx") && is_x86_feature_detected!("fma") {
                 let mut output = [wide::f64x4::ZERO];
                 app.evaluate(
                     &[
@@ -180,7 +180,7 @@ fn complex_over_real_division_preserves_subnormal_ratios() -> anyhow::Result<()>
 #[test]
 #[cfg(target_arch = "x86_64")]
 fn division_preserves_finite_ratios_in_simd_lanes() -> anyhow::Result<()> {
-    if !is_x86_feature_detected!("avx") {
+    if !(is_x86_feature_detected!("avx") && is_x86_feature_detected!("fma")) {
         return Ok(());
     }
     for direct in [false, true] {
