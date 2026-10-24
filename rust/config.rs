@@ -386,8 +386,10 @@ impl Config {
     }
 
     fn cpu_has_avx() -> bool {
+        // The AVX generators also emit FMA3 instructions (complex products, the
+        // `fastmath` fusions), which some AVX CPUs (Intel Sandy and Ivy Bridge) lack.
         #[cfg(target_arch = "x86_64")]
-        return is_x86_feature_detected!("avx");
+        return is_x86_feature_detected!("avx") && is_x86_feature_detected!("fma");
         #[cfg(not(target_arch = "x86_64"))]
         return false;
     }

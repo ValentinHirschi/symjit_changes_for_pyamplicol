@@ -122,7 +122,7 @@ fn complex_root_preserves_range_and_the_small_companion() -> anyhow::Result<()> 
                 }
             }
             #[cfg(target_arch = "x86_64")]
-            if is_x86_feature_detected!("avx") {
+            if is_x86_feature_detected!("avx") && is_x86_feature_detected!("fma") {
                 assert!(app.compiled_simd.is_some());
                 let mut output = [Complex::new(wide::f64x4::ZERO, wide::f64x4::ZERO)];
                 app.evaluate(
@@ -279,7 +279,7 @@ fn complex_division_preserves_range_without_reality_hints() -> anyhow::Result<()
                 }
             }
             #[cfg(target_arch = "x86_64")]
-            if is_x86_feature_detected!("avx") {
+            if is_x86_feature_detected!("avx") && is_x86_feature_detected!("fma") {
                 assert!(app.compiled_simd.is_some());
                 let mut outputs = [Complex::new(wide::f64x4::ZERO, wide::f64x4::ZERO); 2];
                 app.evaluate(
@@ -350,7 +350,7 @@ fn complex_abs_preserves_finite_tiny_and_huge_magnitudes() -> anyhow::Result<()>
                 );
             }
             #[cfg(target_arch = "x86_64")]
-            if is_x86_feature_detected!("avx") {
+            if is_x86_feature_detected!("avx") && is_x86_feature_detected!("fma") {
                 assert!(app.compiled_simd.is_some());
                 let re = [1e-320, 3e-200, 3e200, 1e308];
                 let im = [0., 4e-200, 4e200, 1e308];
