@@ -827,12 +827,18 @@ fn save_reals(stream: &mut impl Write, reals: &HashSet<Loc>) -> Result<()> {
     let num_elems = reals.len();
     stream.write_all(&num_elems.to_le_bytes())?;
 
-    for r in reals.iter() {
-        let b = match r {
+    // sorted, so that the saved bytes do not depend on the iteration order of the HashSet
+    let mut codes: Vec<usize> = reals
+        .iter()
+        .map(|r| match r {
             Loc::Mem(idx) => 0x100000000 | (*idx as usize),
             Loc::Stack(idx) => 0x200000000 | (*idx as usize),
             Loc::Param(idx) => 0x300000000 | (*idx as usize),
-        };
+        })
+        .collect();
+    codes.sort_unstable();
+
+    for b in codes {
         stream.write_all(&b.to_le_bytes())?;
     }
 
