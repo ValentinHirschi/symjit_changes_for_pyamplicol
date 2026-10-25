@@ -492,7 +492,11 @@ impl Storage for Builder {
 
         stream.write_all(&self.ft.len().to_le_bytes())?;
 
-        for s in self.ft.iter() {
+        // sorted, so that the saved bytes do not depend on the iteration order of the HashSet
+        let mut ft: Vec<&String> = self.ft.iter().collect();
+        ft.sort();
+
+        for s in ft {
             super::strings::write(stream, s)?;
         }
 

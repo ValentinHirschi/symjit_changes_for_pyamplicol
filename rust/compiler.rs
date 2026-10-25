@@ -651,6 +651,7 @@ pub struct IndirectTranslator {
     builder: Builder,
     slot_size: usize,
     arena_mode: bool,
+    external_calls: usize, // the number of external calls translated so far (their tags)
 }
 
 impl Composer for IndirectTranslator {
@@ -831,6 +832,7 @@ impl IndirectTranslator {
             builder,
             slot_size,
             arena_mode,
+            external_calls: 0,
         }
     }
 
@@ -1194,7 +1196,10 @@ impl IndirectTranslator {
             // This is a hack to prevent CSE for external call.
             // This will be replaced with a better implementation
             // in version 2.23.
-            let l = self.const_node(rand::random());
+            // The tag is distinct per call and deterministic, so that the
+            // compiled (and saved) program does not change between runs.
+            self.external_calls += 1;
+            let l = self.const_node(self.external_calls as f64);
             let r = self.const_node(n as f64);
             let n = self.binary_node(op, l, r)?;
             // Important! To prevent call from separating from arguments setup.

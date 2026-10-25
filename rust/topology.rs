@@ -103,7 +103,11 @@ impl Topology {
             ir.branch("@success");
         }
 
-        for f in self.subs.values() {
+        // sorted, so that the generated code does not depend on the iteration order of the HashMap
+        let mut subs: Vec<&Subroutine> = self.subs.values().collect();
+        subs.sort_by(|a, b| a.topology.cmp(&b.topology));
+
+        for f in subs {
             match &f.body {
                 Some(body) => {
                     let label = format!("{}_ultra", f.topology);
