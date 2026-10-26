@@ -88,7 +88,7 @@ Config defaults come from `Config::default()` in `rust/config.rs`, overridden by
 directory or the file named by `SYMJIT_TOML`. Python options (`opt_level`, `use_simd`, `enable_simd512`, `cse`,
 `fastmath`, `fast_complex`, `compress`, `compact`, `direct`, `stable_math`, `coroutines`, ...) are packed into a
 bit field in `RustyCompiler.__init__` (`engine.py`) that must match the constants at the top of
-`rust/config.rs` (`stable_math` is `0x0800_0000`, `coroutines` `0x4000_0000`). `ty` strings: `native`, `amd`,
+`rust/config.rs` (`stable_math` is `0x0800_0000`, `coroutines` `0x4000_0000`, `ultra` `0x8000_0000`, the last bit). `ty` strings: `native`, `amd`,
 `amd-avx`, `amd-sse`, `arm`, `riscv`, `bytecode`, `debug`, or a `.toml` path; `Config::from_name` also takes
 `"native;key=value;..."`. `coroutines=True` turns on lockstep evaluation with fixed `yield_every` 10000 and
 `lockstep` 256. `measure(...)` keys: `ker-scalar-size`, `ker-simd-size`, `ker-fast-size`, `mir-size`,

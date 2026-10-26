@@ -2,6 +2,7 @@ use super::runnable::CompilerType;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use super::code::{Func, VirtualTable};
@@ -47,9 +48,8 @@ pub const DEBUG_INSTRUCTIONS: u32 = 0x2000_0000;
 pub const COROUTINES: u32 = 0x4000_0000;
 /// Range-safe complex division, abs, sqrt and negative integer powers (see `Config::stable_math`).
 pub const STABLE_MATH: u32 = 0x0800_0000;
-
-// remaining bits:
-// 0x8000_0000
+/// Calls subroutines through their `_ultra` entries (see `Config::ultra`).
+pub const ULTRA: u32 = 0x8000_0000;
 
 pub const SPILL_AREA: usize = 16;
 pub const ABI_AREA: usize = SPILL_AREA;
@@ -102,6 +102,7 @@ struct Options {
     num_args: u32,
     coroutines: bool,
     stable_math: bool,
+    ultra: bool,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -173,6 +174,9 @@ impl std::fmt::Debug for Config {
         }
         if self.stable_math() {
             write!(f, "stable_math, ")?;
+        }
+        if self.ultra() {
+            write!(f, "ultra, ")?;
         }
         if self.debug_bytecode() {
             write!(f, "debug_bytecode, ")?;
@@ -281,6 +285,7 @@ impl Config {
         config.set_num_args(c.options.num_args);
         config.set_coroutines(c.options.coroutines);
         config.set_stable_math(c.options.stable_math);
+        config.set_ultra(c.options.ultra);
 
         config.set_debug_bytecode(c.debug.bytecode);
         config.set_debug_scalar(c.debug.scalar);
@@ -328,6 +333,7 @@ impl Config {
             direct_arena_identity_output: self.direct_arena_identity_output(),
             coroutines: self.coroutines(),
             stable_math: self.stable_math(),
+            ultra: self.ultra(),
         };
 
         let debug: DebugOptions = DebugOptions {
@@ -485,6 +491,12 @@ impl Config {
         self.test(STABLE_MATH)
     }
 
+    /// Calls subroutines through their `_ultra` entries, which take the first arguments packed
+    /// (independent of `opt_level`). The SSE backend has no `_ultra` entries.
+    pub fn ultra(&self) -> bool {
+        self.test(ULTRA) && !self.is_sse()
+    }
+
     /// Uses pointer descriptors for scalar inputs to a direct arena application.
     pub fn direct_arena(&self) -> bool {
         self.test(DIRECT_ARENA)
@@ -567,8 +579,12 @@ impl Config {
         if self.has_avx() {
             CompilerType::AmdAVX
         } else if self.is_amd64() {
-            println!("warning: fallback to SSE instructions is deprecated and will be removed in a future version.");
-            println!("warning (cont.): the minimum x86-64 profile will be raised to x86-64-v3.");
+            // the warning is written once per session
+            static SSE_WARNED: AtomicBool = AtomicBool::new(false);
+            if !SSE_WARNED.swap(true, Ordering::Relaxed) {
+                println!("warning: fallback to SSE instructions is deprecated and will be removed in a future version.");
+                println!("warning (cont.): the minimum x86-64 profile will be raised to x86-64-v3.");
+            }
             CompilerType::AmdSSE
         } else if self.is_arm64() {
             CompilerType::Arm
@@ -784,6 +800,13 @@ impl Config {
         }
     }
 
+    /// Enables the `_ultra` subroutine calls (see `ultra`).
+    pub fn set_ultra(&mut self, enabled: bool) {
+        if !self.debug_lock() {
+            self.opt = (self.opt & !ULTRA) | if enabled { ULTRA } else { 0 };
+        }
+    }
+
     /// Enables the direct arena scalar-input ABI.
     pub fn set_direct_arena(&mut self, enabled: bool) {
         self.opt = (self.opt & !DIRECT_ARENA) | if enabled { DIRECT_ARENA } else { 0 };
@@ -929,6 +952,9 @@ impl Config {
             }
             "stable_math" => {
                 self.set_stable_math(val.parse::<bool>()?);
+            }
+            "ultra" => {
+                self.set_ultra(val.parse::<bool>()?);
             }
             "opt_level" => {
                 self.set_opt_level(val.parse::<u8>()?);

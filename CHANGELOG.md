@@ -1,5 +1,8 @@
 # Version 2.28.2
 
+* `ultra` option (`Config::set_ultra`, bit `0x8000_0000`, Python `ultra=True`): subroutine calls pass
+  their first arguments packed. It was implied by `opt_level >= 3` and is now separate (off by default).
+* The warning about the SSE fallback is written once per session.
 * `CLAUDE.md` describes the repository only; local notes go in `CLAUDE.local.md` (ignored).
 
 # Version 2.28.1

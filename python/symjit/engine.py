@@ -363,6 +363,7 @@ class RustyCompiler:
         huge: bool=False,
         parallel_mul: bool=True,
         stable_math: bool=False,
+        ultra: bool=False,
     ):
         self.lib: Engine = lib
 
@@ -399,6 +400,7 @@ class RustyCompiler:
             | (0x00200000 if parallel_mul else 0)
             | (0x08000000 if stable_math else 0)
             | (0x40000000 if coroutines else 0)
+            | (0x80000000 if ultra else 0)
             | ((opt_level & 0x0F) << 8)
         )
 
