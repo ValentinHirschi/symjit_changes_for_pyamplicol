@@ -199,11 +199,9 @@ class SpecialValues(unittest.TestCase):
         pts = UNARY_POINTS[~np.isnan(UNARY_POINTS)]
         self.check_unary("Heaviside", sp.Heaviside, lambda a: np.heaviside(a, 0.5), pts)
 
-    # ---------------------------------------------------------------- unsupported
-    @unittest.expectedFailure
-    def test_sign_is_supported(self):
-        # KNOWN LIMITATION: sympy.sign is not compilable ("op_code sign is not found")
-        compile_func([x], [sp.sign(x)])
+    def test_sign(self):
+        # sympy.sign was not compilable ("op_code sign is not found"); sign(+-0) = 0, sign(NaN) = NaN
+        self.check_unary("sign", sp.sign, np.sign)
 
 
 if __name__ == "__main__":

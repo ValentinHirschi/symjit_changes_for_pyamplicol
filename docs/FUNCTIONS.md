@@ -14,6 +14,7 @@
 * Min
 * Max
 * Heaviside
+* sign
 * Abs
 * Not
 * sqrt

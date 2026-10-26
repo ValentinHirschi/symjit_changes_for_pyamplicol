@@ -11,7 +11,7 @@ import warnings
 
 import numpy as np
 import sympy as sp
-from sympy import And, Max, Min, Or, Piecewise, Rational, cos, exp, log, sin, sqrt, symbols
+from sympy import And, Max, Min, Or, Piecewise, Xor, Rational, cos, exp, log, sin, sqrt, symbols
 
 sys.path.insert(0, os.environ.get("SYMJIT_PYTHON_PATH", os.path.join(os.path.dirname(__file__), "..")))
 
@@ -99,20 +99,28 @@ class Regressions(unittest.TestCase):
         self.check([Piecewise((x, x < y), (y, y < z), (z, True))], XR)
         self.check([Piecewise((sin(x), x < -1), (x * y, x < 0), (z, x < 1), (y - z, True))], XR)
 
-    @unittest.expectedFailure
     def test_nary_boolean(self):
-        # KNOWN BUG (open): sympy flattens nested And/Or into one operation with more than two
-        # operands, and compilation fails with `missing poly op: and` / `missing poly op: or`
-        a, b, c = x < y, y < z, z < 0.5
-        self.check([Piecewise((x, Or(a, b, c)), (z, True))], XR, options=[dict(opt_level=2)])
-        self.check([Piecewise((x, And(a, b, c)), (z, True))], XR, options=[dict(opt_level=2)])
+        # sympy flattens nested And/Or/Xor into one operation with more than two operands, and
+        # compilation failed with `missing poly op: and` / `missing poly op: or`
+        a, b, c, d = x < y, y < z, z < 0.5, x < 0
+        self.check([Piecewise((x, Or(a, b, c)), (z, True))], XR)
+        self.check([Piecewise((x, And(a, b, c)), (z, True))], XR)
+        self.check([Piecewise((x, Xor(a, b, c)), (z, True))], XR)
+        self.check([Piecewise((x, Or(And(a, b, c), And(b, c, d), d)), (z, True))], XR)
 
-    @unittest.expectedFailure
     def test_piecewise_without_final_true(self):
-        # KNOWN BUG (open): a Piecewise whose last condition is not `True` is undefined (nan)
-        # outside its conditions in sympy, but symjit treats the last branch as the else branch
+        # a Piecewise whose last condition is not `True` is undefined (nan) outside its
+        # conditions in sympy, but symjit treated the last branch as the else branch
         X = np.array([[-1.0, 0.5, 5.0]] * 3)
-        self.check([Piecewise((1, x < 0), (2, x < 1))], X, options=[dict(opt_level=2)])
+        self.check([Piecewise((1, x < 0), (2, x < 1))], X)
+        self.check([Piecewise((x, x < 0))], X)
+
+    def test_complex_sign(self):
+        # sign(z) = z / |z|, and 0 at 0
+        f = compile_func([x], [sp.sign(x)], dtype="complex128")
+        zc = np.append(ZC, 0j)
+        want = np.where(zc == 0, 0, zc / np.where(zc == 0, 1, np.abs(zc)))
+        np.testing.assert_allclose(np.ravel(f(zc)), want, rtol=1e-14, atol=0)
 
     def test_composer_complex_divide_by_constant(self):
         # x86 fast complex: a constant divisor is loaded into Reg::Temp, which `divide` used as
