@@ -88,6 +88,10 @@ impl Builder {
     }
 
     pub fn add_unary(&mut self, op: Operation, arg: Node) -> Result<Node> {
+        if op.as_str() == "sign" {
+            return self.create_sign(arg);
+        }
+
         if !self.config.is_intrinsic_unary(&op) {
             self.ft.insert(op.to_string());
         }
@@ -195,6 +199,27 @@ impl Builder {
         self.block().add_branch_if(cond, &label, true);
 
         Ok(accum_var)
+    }
+
+    /// sympy's `sign`: 1, -1, or |x| (0 for +-0, NaN for NaN, as numpy) for a real x; z / |z|
+    /// (0 at 0) for a complex z. The comparisons are `lt` (NaN gives false; `gt` would give true).
+    pub fn create_sign(&mut self, arg: Node) -> Result<Node> {
+        let zero = self.create_const(0.0)?;
+
+        if self.config.is_complex() {
+            let abs = self.create_unary(Operation::new("abs"), arg.clone())?;
+            let cond = self.create_binary(Operation::new("eq"), abs.clone(), zero)?;
+            let unit = self.create_binary(Operation::Divide, arg.clone(), abs)?;
+            return self.create_ifelse(cond, arg, unit);
+        }
+
+        let one = self.create_const(1.0)?;
+        let minus_one = self.create_const(-1.0)?;
+        let neg = self.create_binary(Operation::new("lt"), arg.clone(), zero.clone())?;
+        let abs = self.create_unary(Operation::new("abs"), arg.clone())?;
+        let x0 = self.create_ifelse(neg, minus_one, abs)?;
+        let pos = self.create_binary(Operation::new("lt"), zero, arg)?;
+        self.create_ifelse(pos, one, x0)
     }
 
     pub fn create_ifelse(&mut self, cond: Node, true_val: Node, false_val: Node) -> Result<Node> {

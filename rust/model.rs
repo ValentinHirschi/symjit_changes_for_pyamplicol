@@ -254,7 +254,8 @@ impl Expr {
             return self.transform_loop(builder, op, args);
         }
 
-        if !(op == "plus" || op == "times" || op == "min" || op == "max") {
+        // sympy flattens nested And/Or/Xor into one operation with any number of operands
+        if !matches!(op, "plus" | "times" | "min" | "max" | "and" | "or" | "xor") {
             return Err(anyhow!("missing poly op: {}", op));
         }
 

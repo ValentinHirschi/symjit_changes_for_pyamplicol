@@ -321,6 +321,12 @@ impl Expr {
         Self::unary("heaviside", self)
     }
 
+    /// The sign function: 1 if self > 0, -1 if self < 0, 0 if self is +-0, NaN for NaN;
+    /// self / |self| for a complex non-zero self.
+    pub fn sign(&self) -> Expr {
+        Self::unary("sign", self)
+    }
+
     pub fn sqrt(&self) -> Expr {
         Expr::unary("root", self)
     }

@@ -140,16 +140,18 @@ def boolean(y):
     return tree_node(op, y.args)
 
 
-def piecewise(args):
-    cond = args[0][1]
-    x1 = args[0][0]
+# NaN as 0/0 (JSON has no NaN literal)
+NAN = {"type": "Tree", "op": "divide", "args": [{"type": "Const", "val": 0.0}] * 2}
 
-    if len(args) == 1:
+
+def piecewise(args):
+    x1, cond = args[0]
+
+    if cond == True:
         return expr(x1)
-    if len(args) == 2:
-        x2 = args[1][0]
-    else:
-        x2 = piecewise(args[1:])
+
+    # like sympy, a Piecewise is undefined (NaN) outside its conditions
+    x2 = piecewise(args[1:]) if len(args) > 1 else NAN
 
     return tree_node("ifelse", [cond, x1, x2])
 

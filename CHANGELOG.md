@@ -3,6 +3,9 @@
 * `ultra` option (`Config::set_ultra`, bit `0x8000_0000`, Python `ultra=True`): subroutine calls pass
   their first arguments packed. It was implied by `opt_level >= 3` and is now separate (off by default).
 * The warning about the SSE fallback is written once per session.
+* `sign` is supported (`Expr::sign`): 1, -1, 0 (for +-0) or NaN; `z / |z|` for complex.
+* `And`/`Or`/`Xor` with more than two operands (sympy flattens nested ones) compile.
+* A `Piecewise` whose last condition is not `True` is NaN outside its conditions, as in sympy.
 * `CLAUDE.md` describes the repository only; local notes go in `CLAUDE.local.md` (ignored).
 
 # Version 2.28.1
