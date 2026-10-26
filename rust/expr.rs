@@ -455,19 +455,19 @@ impl Expr {
     }
 
     pub fn si(&self) -> Expr {
-        Expr::unary("si", self)
+        Expr::unary("Si", self)
     }
 
     pub fn ci(&self) -> Expr {
-        Expr::unary("ci", self)
+        Expr::unary("Ci", self)
     }
 
     pub fn shi(&self) -> Expr {
-        Expr::unary("shi", self)
+        Expr::unary("Shi", self)
     }
 
     pub fn chi(&self) -> Expr {
-        Expr::unary("chi", self)
+        Expr::unary("Chi", self)
     }
 }
 

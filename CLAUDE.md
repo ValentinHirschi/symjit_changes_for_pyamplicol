@@ -76,7 +76,24 @@ are `#![cfg(target_arch = "x86_64")]`, `tests/bug_fp_preserve.rs` is aarch64-onl
 
 On Windows the library is `symjit.dll` and the Python package loads `python/symjit/_lib.cp312-win_amd64.pyd`.
 Linux and macOS cannot catch Win64 calling-convention bugs (see "Win64 non-volatile registers" below), so
-run the tests on a Windows x64 machine after changing the AMD prologues, epilogues or register saves.
+run the tests on a Windows x64 machine after changing the AMD prologues, epilogues or register saves, or
+on Linux under Wine (installed here: the `x86_64-pc-windows-gnu` Rust target, `mingw-w64`, Wine 9). Wine runs
+the Windows binaries natively, so the Win64 ABI is real: `tests/win64_nonvolatile.rs` fails there on the
+tree before the xmm6–xmm15 fix and passes after it. Run outside the Bash sandbox (`~/.rustup` and Wine
+need it); the prefix lives in a scratch directory and no window opens without `DISPLAY`:
+
+```bash
+export WINEPREFIX=/tmp/wineprefix WINEDEBUG=-all WINEDLLOVERRIDES="mscoree,mshtml=" \
+    CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=x86_64-w64-mingw32-gcc \
+    CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER=wine
+unset DISPLAY WAYLAND_DISPLAY
+wineboot -i                                    # once per prefix
+CARGO_TARGET_DIR=/tmp/stable-win cargo test --release --offline --target x86_64-pc-windows-gnu
+rm -f Cargo.lock test.bin
+```
+
+The GNU target links with MinGW instead of MSVC (same calling convention); the Python tests are not run
+under Wine. A final run on real Windows is still worthwhile before a release.
 
 ### Python
 

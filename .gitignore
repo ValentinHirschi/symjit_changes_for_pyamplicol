@@ -3,3 +3,11 @@ examples/claude/wasm-obj/out
 examples/claude/wasm/out
 *.pyc
 __pycache__/
+
+# local work files (development copy)
+examples/claude/obj/
+examples/claude/wasm-obj/
+examples/sjc/
+examples/pi.sjb
+GL297_summed_instructions
+.claude/

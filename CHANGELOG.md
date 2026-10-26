@@ -1,6 +1,10 @@
 # Version 2.28.1
 
 * `.sjb` files version 3 (2.22-2.26) can be read.
+* x86-64: the AVX code is chosen only on CPUs that also have FMA3 (#24).
+* `Config::default`: an unreadable or malformed `symjit.toml` is reported and ignored (#25).
+* `Application::save` writes the same bytes for the same program (#26).
+* `Expr::si`/`ci`/`shi`/`chi` emit the function names symjit knows (`Si`, `Ci`, `Shi`, `Chi`).
 
 # Version 2.28.0
 
