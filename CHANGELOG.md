@@ -1,3 +1,7 @@
+# Version 2.28.2
+
+* `CLAUDE.md` describes the repository only; local notes go in `CLAUDE.local.md` (ignored).
+
 # Version 2.28.1
 
 * `.sjb` files version 3 (2.22-2.26) can be read.
