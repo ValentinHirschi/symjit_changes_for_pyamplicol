@@ -4,46 +4,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Symjit (2.28.0) is a JIT compiler that turns SymPy/Symbolica
+Symjit (2.28) is a JIT compiler that turns SymPy/Symbolica
 expressions into machine code (AMD64 with SSE/AVX/AVX2/AVX-512, ARM64/NEON, RISC-V64) without LLVM. It is a
 Rust `cdylib`/`rlib` (`rust/lib.rs`, crate `symjit`) wrapped by a thin Python package (`python/symjit`) that
 talks to it over a C ABI with `ctypes`. The crate also has a public Rust API (`Compiler`, `Translator`,
 `Composer`, `Expr`, `Applet`, `Application`, `Config`, `Defuns`, `Matrix`, ...; see the `pub use` list in
 `lib.rs`), and `symjit::backend` re-exports the internals an outside code generator needs (`Generator`,
-`Mir`, `Builder`, `Complexifier`, `Reg`, `Loc`, ...; used by `../symjit-utils`). Prose docs are in `docs/`
+`Mir`, `Builder`, `Complexifier`, `Reg`, `Loc`, ...; used by
+[symjit-utils](https://github.com/siravan/symjit-utils)). Prose docs are in `docs/`
 (COMPILATION, COMPOSER, FUNCTIONS, INSPECTION, OPTIMIZATION, SYMBOLICA, COMPANIONS).
 
-## Repository layout
-
-This tree is `stable/` inside `symjit-playground/` (named `v227/` until 2026-10-19):
-
-| Path (from `symjit-playground/`) | What it is |
-|---|---|
-| `stable/` | **This tree, the active copy**: the published 2.27 line with its fixes. |
-| `symjit-utils/` | Command-line tools built on this crate (`symjit = { path = "../stable" }`): `sjb2wasm`, `sjb2obj`, `rust2sjb`, `sjbinfo`, `sjb2ptx` (CUDA PTX). Its own workspace and CLAUDE.md. |
-| `patches/` | `v227-*.patch`: changes to this tree made before the rename; new ones are `stable-<topic>.patch`. `v228-*.patch`: the series of `dev/`. |
-| `plans/` | Designs and plans, e.g. `plans/sjb2ptx/` (DESIGN.md, PHASE5.md). |
-| `dev/`, `core/`, `sjc/` | The 2.28 development line (crate split, `composer`/`wasm`/`obj`/`math` features). **On hold.** |
-| `rust/`, `python/`, `examples/`, `CLAUDE.md`, ... at the root | **Archived**: the earlier development line. Read-only; its data is still used (`examples/symbolica/*.txt`, `GL297_study/`). |
-
-There is no git: changes are recorded as patch files. Before changing this tree, take a snapshot
-(`tar` into `~/symjit-snapshots`, as its own step); afterwards write `patches/stable-<topic>.patch` with
-`diff -ruN a b` against the files of the snapshot and check that `patch -p1` on the snapshot reproduces
-the tree.
+Branches: `v228` is the 2.28.x line (2.28.0, 2.28.1, ...), `v227` the 2.27.x line; each minor version
+gets its own branch (`v229` for 2.29).
 
 ## Build, test, run
 
-The tree has no `Cargo.lock` and no `target/`. Build with `--offline` and an outside target directory (one
-per tree: a target directory shared with a copy of the tree makes cargo reuse the copy's build), then delete
-the `Cargo.lock` (and the `test.bin` that `tests/kernels.rs` writes) that the build leaves:
-
 ```bash
-CARGO_TARGET_DIR=/tmp/stable-t cargo build --release --lib --offline   # -> libsymjit.so
-CARGO_TARGET_DIR=/tmp/stable-t cargo test --release --offline         # ~2200 unit + integration tests
+cargo build --release --lib                  # -> target/release/libsymjit.so
+cargo test --release                         # ~2200 unit + integration tests
 cargo test --lib amd::tests                  # one module; add a test name to run a single test
 cargo test --release --test call_capacity    # one integration test file
-rm -f Cargo.lock test.bin
 ```
+
+`tests/kernels.rs` writes a `test.bin` in the working directory; neither it nor `Cargo.lock` is part of the
+repository.
 
 Build with `--lib`, or the `profiler` bin (`profile/profiler.rs`, a Samply driver that reads
 `3loop_instructions_2.txt` from the working directory) is built too. Cargo features: `async` (**default**,
@@ -57,7 +41,7 @@ working directory cannot change the tests. List every key in that file: a missin
 Note that it sets `symbolica = true` (inputs are parameters): tests of `Compiler`/`Expr` models call
 `config.set_symbolica(false)`.
 
-Cross-testing under qemu-user (installed: the two Rust targets, `gcc-aarch64-linux-gnu`,
+Cross-testing under qemu-user (needs the two Rust targets, `gcc-aarch64-linux-gnu`,
 `gcc-riscv64-linux-gnu`, `qemu-user`):
 
 ```bash
@@ -76,24 +60,7 @@ are `#![cfg(target_arch = "x86_64")]`, `tests/bug_fp_preserve.rs` is aarch64-onl
 
 On Windows the library is `symjit.dll` and the Python package loads `python/symjit/_lib.cp312-win_amd64.pyd`.
 Linux and macOS cannot catch Win64 calling-convention bugs (see "Win64 non-volatile registers" below), so
-run the tests on a Windows x64 machine after changing the AMD prologues, epilogues or register saves, or
-on Linux under Wine (installed here: the `x86_64-pc-windows-gnu` Rust target, `mingw-w64`, Wine 9). Wine runs
-the Windows binaries natively, so the Win64 ABI is real: `tests/win64_nonvolatile.rs` fails there on the
-tree before the xmm6–xmm15 fix and passes after it. Run outside the Bash sandbox (`~/.rustup` and Wine
-need it); the prefix lives in a scratch directory and no window opens without `DISPLAY`:
-
-```bash
-export WINEPREFIX=/tmp/wineprefix WINEDEBUG=-all WINEDLLOVERRIDES="mscoree,mshtml=" \
-    CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=x86_64-w64-mingw32-gcc \
-    CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER=wine
-unset DISPLAY WAYLAND_DISPLAY
-wineboot -i                                    # once per prefix
-CARGO_TARGET_DIR=/tmp/stable-win cargo test --release --offline --target x86_64-pc-windows-gnu
-rm -f Cargo.lock test.bin
-```
-
-The GNU target links with MinGW instead of MSVC (same calling convention); the Python tests are not run
-under Wine. A final run on real Windows is still worthwhile before a release.
+run the tests on a Windows x64 machine after changing the AMD prologues, epilogues or register saves.
 
 ### Python
 
@@ -102,15 +69,14 @@ The package does **not** build the library on import: `python/symjit/engine.py` 
 over it (a stale `_lib*.so` is the most common reason for Python tests failing after a Rust fix):
 
 ```bash
-cp /tmp/stable-t/release/libsymjit.so python/symjit/_lib.cpython-312-x86_64-linux-gnu.so
+cp target/release/libsymjit.so python/symjit/_lib.cpython-312-x86_64-linux-gnu.so
 PYTHONPATH=python python -B -m unittest discover -s python/tests      # all Python tests
 SYMJIT_FUZZ_SEEDS=1500 SYMJIT_FUZZ_START=5000 python python/tests/test_fuzz.py   # bigger fuzz run
 ```
 
-Tests that use the `symbolica` package must run outside the Bash sandbox. If Symbolica runs unlicensed
-(restricted mode), it locks its thread permit in `$XDG_RUNTIME_DIR`, which the shell inherits as another
-user's `/run/user/1000` ("Could not acquire Symbolica thread permit"): then set
-`XDG_RUNTIME_DIR=$HOME/.cache/xdg-runtime`.
+Tests that use the `symbolica` package are skipped without it. Unlicensed (restricted mode), Symbolica
+locks a thread permit in `$XDG_RUNTIME_DIR`, which must be writable ("Could not acquire Symbolica thread
+permit" otherwise).
 
 `python/tests`: `test_regressions.py` (a minimal repro per fixed bug; `expectedFailure` = known open bug),
 `test_fuzz.py` (random expressions × ~10 option sets against numpy; `SYMJIT_FUZZ_VERBOSE=1` prints each case,
@@ -128,7 +94,7 @@ bit field in `RustyCompiler.__init__` (`engine.py`) that must match the constant
 `lockstep` 256. `measure(...)` keys: `ker-scalar-size`, `ker-simd-size`, `ker-fast-size`, `mir-size`,
 `mir-bytes`, `stack-size`, `async`, `version`. Saved `.sjb` files are version 4 (2.27 on: the `Config`
 holds the stack limit and argument count); version 3 (2.22–2.26, e.g. pyAmpliCol's kernels, symjit
-2.26.4) has neither, and loads with the defaults (`tests/sjb_version3.rs`; until 2026-10-21 version-3
+2.26.4) has neither, and loads with the defaults since 2.28.1 (`tests/sjb_version3.rs`; before, version-3
 files failed with `invalid magic number (Program)`). `Application::read_sjb` reads one without compiling it.
 
 Examples (`examples/*.py`) double as smoke tests and take options through `examples/util.py`;
@@ -203,7 +169,7 @@ per-host baseline (run by hand, not in the test suite).
   stack frame holds only the states and observables, and the derivatives were written past it (stack
   corruption). `execute_vectorized`/`execute_matrix` refuse them (Python: a `ValueError`), and
   `Application::exec_vectorized` asserts. Call such models one point at a time, or rewrite the JSON so the
-  derivatives are observables (as `../symjit-ionic/ionic/model.py` does).
+  derivatives are observables.
 - **RISC-V immediates**: the `rvv!` macro masks immediates to their field width without a range check; a
   value that may not fit (e.g. an argument count up to `SLICE_CAP` = 2048) must go through `li`, and offsets
   through the `load_*`/`save_*` helpers, which switch to `li` + `add` above 2047.
