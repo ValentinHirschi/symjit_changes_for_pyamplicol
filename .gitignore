@@ -12,3 +12,7 @@ examples/pi.sjb
 GL297_summed_instructions
 .claude/
 CLAUDE.local.md
+
+# build output of the Python package
+*.egg-info/
+python/symjit/_lib*
