@@ -555,24 +555,16 @@ impl Generator for AmdVectorF64x4Generator {
     fn times_complex(&mut self, xd: Reg, yd: Reg, x1: Reg, y1: Reg, x2: Reg, y2: Reg) -> bool {
         let xt = Reg::Gen(2);
         let yt = Reg::Gen(3);
+        // Aliasing is decided on the physical registers: distinct logical registers share one
+        // (`Reg::Ret` and `Reg::Left` are register 0, `Reg::Temp` and `Reg::Right` register 1),
+        // e.g. `(%l + %t*im) := (%$ + %t*im) Times (..)` after the peephole optimizer.
+        let sources = [ϕ(x1), ϕ(y1), ϕ(x2), ϕ(y2)];
 
-        if xd != x1 && xd != x2 {
+        if !sources.contains(&ϕ(xd)) && !sources.contains(&ϕ(yd)) {
             self.times(xd, y1, y2);
             self.fused_mul_sub(xd, x1, x2, xd);
             self.times(yd, x1, y2);
             self.fused_mul_add(yd, x2, y1, yd);
-        } else if xd == x1 && xd != x2 {
-            self.times(xt, y1, y2);
-            self.fused_mul_sub(xt, x1, x2, xt);
-            self.times(yd, x2, y1);
-            self.fused_mul_add(yd, x1, y2, yd);
-            self.fmov(xd, xt);
-        } else if xd != x1 && xd == x2 {
-            self.times(xt, y1, y2);
-            self.fused_mul_sub(xt, x1, x2, xt);
-            self.times(yd, x1, y2);
-            self.fused_mul_add(yd, x2, y1, yd);
-            self.fmov(xd, xt);
         } else {
             self.times(xt, y1, y2);
             self.fused_mul_sub(xt, x1, x2, xt);
